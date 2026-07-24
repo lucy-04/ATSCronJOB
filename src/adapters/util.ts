@@ -11,3 +11,15 @@ export function tokenOf(target: Target): string {
   }
   return (target as SimpleTarget).token;
 }
+
+/**
+ * Stable per-source key derived from the target — NOT the display `company`,
+ * so renaming a company never resets its dedup history. Used as the state-store
+ * partition key.
+ */
+export function sourceKeyOf(target: Target): string {
+  if (target.ats === "workday") {
+    return `${target.ats}:${target.tenant}:${target.site}`;
+  }
+  return `${target.ats}:${target.token}`;
+}

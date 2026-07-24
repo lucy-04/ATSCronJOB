@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.local
+
+# Local state. In production this lives on the orphan `state` branch, never main.
+state.db
+state.db-journal
+state.db-wal
+state.db-shm

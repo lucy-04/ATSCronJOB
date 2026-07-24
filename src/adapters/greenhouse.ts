@@ -1,4 +1,4 @@
-import type { Adapter, HttpClient, Job, Target } from "../core/types.js";
+import type { CompanyAdapter, HttpClient, Job, CompanySource } from "../core/types.js";
 import { tokenOf } from "./util.js";
 
 // Shape of the fields we consume from the Greenhouse Job Board API.
@@ -29,11 +29,11 @@ function normalize(raw: GreenhouseJob): Job {
   };
 }
 
-export const greenhouseAdapter: Adapter = {
+export const greenhouseAdapter: CompanyAdapter = {
   ats: "greenhouse",
-  async fetchJobs(target: Target, http: HttpClient): Promise<Job[]> {
+  async fetchJobs(source: CompanySource, http: HttpClient): Promise<Job[]> {
     const url = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(
-      tokenOf(target),
+      tokenOf(source),
     )}/jobs?content=true`;
     const data = await http.getJson<GreenhouseResponse>(url);
     return (data.jobs ?? []).map(normalize);

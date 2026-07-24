@@ -1,4 +1,4 @@
-import { loadTargets } from "./config.js";
+import { loadSources } from "./config.js";
 import { createHttpClient } from "./core/http.js";
 import { createSqliteStore } from "./core/state.js";
 import { poll } from "./core/poll.js";
@@ -12,7 +12,7 @@ async function main(): Promise<void> {
   const store = createSqliteStore({ path: process.env.STATE_DB_PATH || undefined });
   try {
     await poll({
-      targets: loadTargets(),
+      sources: loadSources(),
       http: createHttpClient(),
       store,
       notifier: consoleNotifier,

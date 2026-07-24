@@ -1,12 +1,13 @@
+import { sourceLabel } from "../adapters/util.js";
 import type { Notification, Notifier } from "../core/types.js";
 
-// Sorts by tier (lower = higher priority) then company, so the most important
+// Sorts by tier (lower = higher priority) then label, so the most important
 // roles print first. Used for local runs and as a fallback notifier.
-function byTierThenCompany(a: Notification, b: Notification): number {
-  const ta = a.target.tier ?? 3;
-  const tb = b.target.tier ?? 3;
+function byTierThenLabel(a: Notification, b: Notification): number {
+  const ta = a.source.tier ?? 3;
+  const tb = b.source.tier ?? 3;
   if (ta !== tb) return ta - tb;
-  return a.target.company.localeCompare(b.target.company);
+  return sourceLabel(a.source).localeCompare(sourceLabel(b.source));
 }
 
 export const consoleNotifier: Notifier = {
@@ -16,10 +17,12 @@ export const consoleNotifier: Notifier = {
       return;
     }
     console.log(`\n${items.length} new job(s):\n`);
-    for (const { job, target } of [...items].sort(byTierThenCompany)) {
-      const tier = target.tier ?? 3;
+    for (const { job, source } of [...items].sort(byTierThenLabel)) {
+      const tier = source.tier ?? 3;
+      // Hiring company: aggregator jobs carry it per-job; company sources use the label.
+      const who = job.company ?? sourceLabel(source);
       const dept = job.department ? ` · ${job.department}` : "";
-      console.log(`  [T${tier}] ${target.company} — ${job.title}`);
+      console.log(`  [T${tier}] ${who} — ${job.title}`);
       console.log(`        ${job.location}${dept}`);
       console.log(`        ${job.url}`);
     }

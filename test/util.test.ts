@@ -1,21 +1,33 @@
 import { describe, it, expect } from "vitest";
-import { sourceKeyOf } from "../src/adapters/util.js";
-import type { Target } from "../src/core/types.js";
+import { sourceKeyOf, sourceLabel } from "../src/adapters/util.js";
+import type { Source } from "../src/core/types.js";
 
 describe("sourceKeyOf", () => {
-  it("keys a token-based target by ats and token", () => {
-    const t: Target = { company: "Acme", ats: "greenhouse", token: "acme" };
-    expect(sourceKeyOf(t)).toBe("greenhouse:acme");
+  it("keys a token-based company by ats and token", () => {
+    const s: Source = { kind: "company", company: "Acme", ats: "greenhouse", token: "acme" };
+    expect(sourceKeyOf(s)).toBe("greenhouse:acme");
   });
 
-  it("keys a workday target by ats, tenant, and site", () => {
-    const t: Target = { company: "Big Co", ats: "workday", tenant: "bigco", dc: "wd1", site: "External" };
-    expect(sourceKeyOf(t)).toBe("workday:bigco:External");
+  it("keys a workday company by ats, tenant, and site", () => {
+    const s: Source = { kind: "company", company: "Big Co", ats: "workday", tenant: "bigco", dc: "wd1", site: "External" };
+    expect(sourceKeyOf(s)).toBe("workday:bigco:External");
   });
 
-  it("is independent of the display company name", () => {
-    const a: Target = { company: "Old Name", ats: "greenhouse", token: "acme" };
-    const b: Target = { company: "New Name", ats: "greenhouse", token: "acme" };
+  it("keys a query source by provider, query, where, and country (slugged, stable across label renames)", () => {
+    const a: Source = { kind: "query", provider: "adzuna", query: "ML Engineer", where: "Remote", country: "us", label: "nickname A" };
+    const b: Source = { kind: "query", provider: "adzuna", query: "ML Engineer", where: "Remote", country: "us", label: "nickname B" };
+    expect(sourceKeyOf(a)).toBe("adzuna:ml-engineer|remote|us");
     expect(sourceKeyOf(a)).toBe(sourceKeyOf(b));
+  });
+});
+
+describe("sourceLabel", () => {
+  it("uses the company name for company sources", () => {
+    const s: Source = { kind: "company", company: "Acme", ats: "greenhouse", token: "acme" };
+    expect(sourceLabel(s)).toBe("Acme");
+  });
+  it("uses the label for query sources", () => {
+    const s: Source = { kind: "query", provider: "adzuna", query: "ML", where: "Remote", country: "us", label: "ML remote" };
+    expect(sourceLabel(s)).toBe("ML remote");
   });
 });

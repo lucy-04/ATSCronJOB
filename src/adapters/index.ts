@@ -1,13 +1,16 @@
 import type { Ats, CompanyAdapter, Provider, QueryAdapter } from "../core/types.js";
 import { greenhouseAdapter } from "./greenhouse.js";
+import { adzunaAdapter } from "./adzuna.js";
 
 // Company ATS adapters, keyed by ATS. Others (lever, ashby, …) register here.
 const companyRegistry: Partial<Record<Ats, CompanyAdapter>> = {
   greenhouse: greenhouseAdapter,
 };
 
-// Aggregator query adapters, keyed by provider. Adzuna registers in Task 2.
-const queryRegistry: Partial<Record<Provider, QueryAdapter>> = {};
+// Aggregator query adapters, keyed by provider.
+const queryRegistry: Partial<Record<Provider, QueryAdapter>> = {
+  adzuna: adzunaAdapter,
+};
 
 export function getCompanyAdapter(ats: Ats): CompanyAdapter {
   const adapter = companyRegistry[ats];

@@ -1,8 +1,17 @@
 # ATS Job Poller — Project Summary
 
-> Generated 2026-07-24 by reading the codebase. The previous Claude Code session's
-> plan-mode notes were lost, so this reconstructs the project's intent and roadmap
-> from the source itself (which is heavily commented with phase markers).
+> **Current status (updated 2026-07-25):** the sections below were the original
+> Phase-1 snapshot; the project has since advanced. What's true now:
+> - **Phase 2 (done):** SQLite dedup — reports only newly-seen roles (seed-silently,
+>   14-day prune). See `docs/phase-2-explained.md`.
+> - **Phase 3 (done):** hourly GitHub Actions cron persisting `state.db` to an orphan
+>   `state` branch. See `docs/deployment.md`.
+> - **Hybrid search (done):** config moved from `targets.json` to **`sources.json`**,
+>   which holds both company ATS boards (`"kind":"company"`) and cross-company
+>   title/keyword searches via Adzuna (`"kind":"query"`). Loader is `loadSources()`.
+> - Now a git repo on GitHub with a passing `vitest` suite.
+>
+> Design/roadmap docs live under `docs/superpowers/`. The original snapshot follows.
 
 ## What it is
 
@@ -30,7 +39,7 @@ only prints to the console.
 
 `src/index.ts` is the entrypoint. On each run it:
 
-1. **Loads targets** from `targets.json` (`src/config.ts`) — currently just a shape check, not full validation.
+1. **Loads sources** from `sources.json` (`src/config.ts`, `loadSources()`) — a shape check, not full validation yet.
 2. For each target, looks up an **adapter** by its `ats` field via the registry (`src/adapters/index.ts`).
 3. Skips any ATS with no adapter implemented yet (prints a "not implemented" line).
 4. Calls `adapter.fetchJobs(target, http)` to hit the ATS API and get normalized `Job[]`.
@@ -43,7 +52,7 @@ only prints to the console.
 ```
 src/
 ├── index.ts              # Phase 1 entrypoint: load → fetch → print
-├── config.ts             # loadTargets(): read + shape-check targets.json
+├── config.ts             # loadSources(): read + shape-check sources.json
 ├── core/
 │   ├── types.ts          # Shared contracts (the stable core of the design)
 │   └── http.ts           # HttpClient factory: UA header, timeout, JSON parse

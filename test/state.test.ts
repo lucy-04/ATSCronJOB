@@ -125,9 +125,26 @@ describe("close (WAL checkpoint)", () => {
   it("folds WAL writes into the main db file and truncates the -wal file", () => {
     const dir = mkdtempSync(join(tmpdir(), "state-wal-"));
     const dbPath = join(dir, "state.db");
+    // A second, idle connection to the SAME on-disk file, kept open across
+    // store.close(). This is the crux of the test: SQLite auto-truncates the
+    // -wal file when the LAST connection closes, regardless of any explicit
+    // checkpoint pragma. With this second connection still open, store.close()
+    // is no longer closing the last connection — so only the store's own
+    // `wal_checkpoint(TRUNCATE)` can zero out the -wal file. Without that
+    // pragma, this test genuinely fails.
+    const idleConn = new Database(dbPath);
     try {
       const store = createSqliteStore({ path: dbPath });
       store.diffAndRecord("gh:acme", [job("1")]);
+
+      // A merely-*opened* second connection doesn't register as a WAL reader
+      // until it actually touches the database — SQLite maps a connection
+      // into the wal-index lazily, on first access. So we issue one cheap,
+      // non-transactional read here (after there's WAL content to see, and
+      // before store.close()) to make idleConn a real second reader without
+      // holding a transaction/snapshot that could block a TRUNCATE checkpoint.
+      idleConn.pragma("user_version");
+
       store.close();
 
       // After a TRUNCATE checkpoint the -wal file is either gone or 0 bytes.
@@ -143,6 +160,7 @@ describe("close (WAL checkpoint)", () => {
       reopened.close();
       expect(row?.job_id).toBe("1");
     } finally {
+      idleConn.close();
       rmSync(dir, { recursive: true, force: true });
     }
   });

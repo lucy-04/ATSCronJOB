@@ -48,6 +48,15 @@ for `HttpClient`.
 ## Data model
 
 ```sql
+-- Registry of sources ever initialized. Distinguishes "never polled this source"
+-- (→ seed silently) from "polled before but pruned down to zero jobs"
+-- (→ reappearing jobs re-notify). A row-count check on seen_jobs alone cannot
+-- tell these apart, which would wrongly re-seed a pruned source.
+CREATE TABLE IF NOT EXISTS sources (
+  source     TEXT PRIMARY KEY,
+  first_seen TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS seen_jobs (
   source     TEXT NOT NULL,   -- stable key, NOT display name
   job_id     TEXT NOT NULL,
@@ -69,7 +78,9 @@ CREATE TABLE IF NOT EXISTS seen_jobs (
 
 Runs per source, per poll:
 
-1. `isNewSource = (count of rows for source === 0)`
+1. `isNewSource = (source NOT present in the sources table)`. If new, insert it.
+   — checked against the `sources` registry, **not** a `seen_jobs` row count, so a
+   source pruned to zero jobs is still "known" and its reappearing jobs re-notify.
 2. `existingIds = set of job_id currently stored for source`
 3. `newJobs = isNewSource ? [] : jobs.filter(j => !existingIds.has(j.id))`
    — seed-silently falls out of step 1 for free.

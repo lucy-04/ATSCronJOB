@@ -4,7 +4,7 @@ import { createSqliteStore } from "./core/state.js";
 import { poll } from "./core/poll.js";
 import { consoleNotifier } from "./notifiers/console.js";
 
-// Phase 2 entrypoint: load targets, poll each supported source, dedup against
+// Phase 2 entrypoint: load sources, poll each supported source, dedup against
 // persistent SQLite state, and print only newly-seen jobs. Telegram = later phase.
 async function main(): Promise<void> {
   // STATE_DB_PATH lets CI point at the checked-out state branch copy; unset

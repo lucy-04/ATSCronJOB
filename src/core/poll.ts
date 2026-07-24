@@ -32,6 +32,11 @@ function isSupported(source: Source, atses: Set<string>, providers: Set<string>)
   return source.kind === "query" ? providers.has(source.provider) : atses.has(source.ats);
 }
 
+/** Per-kind detail suffix for the summary line: the ATS for company sources, the provider for query sources. */
+function sourceDetail(source: Source): string {
+  return source.kind === "query" ? source.provider : source.ats;
+}
+
 /**
  * One poll cycle: fetch each supported source, dedup against the store, prune
  * (only sources that fetched OK), and notify only the jobs new to us. Per-source
@@ -57,7 +62,7 @@ export async function poll(deps: PollDeps): Promise<void> {
       const key = sourceKeyOf(source);
       const newJobs = store.diffAndRecord(key, jobs);
       okSources.push(key);
-      console.log(`${label}: ${jobs.length} job(s), ${newJobs.length} new`);
+      console.log(`${label} (${sourceDetail(source)}): ${jobs.length} job(s), ${newJobs.length} new`);
       for (const job of newJobs) found.push({ job, source });
     } catch (err) {
       console.error(`  ! ${label} failed: ${(err as Error).message}`);

@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { poll } from "../src/core/poll.js";
 import { createSqliteStore } from "../src/core/state.js";
 import { sourceLabel } from "../src/adapters/util.js";
+import { queryRegistry } from "../src/adapters/index.js";
 import type { HttpClient, Notification, Notifier, Source } from "../src/core/types.js";
 
 // Returns a Greenhouse-shaped payload for any GET; postJson is never used here.
@@ -57,6 +58,11 @@ function capturingNotifier(sink: Notification[]): Notifier {
 const source: Source = { kind: "company", company: "Acme", ats: "greenhouse", token: "acme", tier: 1 };
 
 describe("poll", () => {
+  afterEach(() => {
+    delete process.env.ADZUNA_APP_ID;
+    delete process.env.ADZUNA_APP_KEY;
+  });
+
   it("seeds silently on the first run, then notifies only new jobs", async () => {
     const store = createSqliteStore({ path: ":memory:" });
 
@@ -102,5 +108,45 @@ describe("poll", () => {
     expect(sink).toEqual([]); // A's job survived the outage -> nothing new
 
     store.close();
+  });
+
+  it("logs a per-source summary line with the kind detail suffix", async () => {
+    process.env.ADZUNA_APP_ID = "id1";
+    process.env.ADZUNA_APP_KEY = "key1";
+    const store = createSqliteStore({ path: ":memory:" });
+    const company: Source = { kind: "company", company: "Acme", ats: "greenhouse", token: "acme", tier: 1 };
+    const query: Source = {
+      kind: "query",
+      provider: "adzuna",
+      query: "ML",
+      where: "remote",
+      country: "us",
+      label: "ML remote",
+      tier: 1,
+    };
+    const http: HttpClient = {
+      async getJson<T>(url: string): Promise<T> {
+        if (url.includes("/api/jobs/")) return { results: [] } as T;
+        return { jobs: [] } as T;
+      },
+      async postJson<T>(): Promise<T> {
+        throw new Error("unused");
+      },
+    };
+    // Adzuna's real adapter isn't registered on this branch yet (that's a
+    // separate task); register a minimal fake for the query kind so this test
+    // can exercise the query-source summary-line path end to end via poll().
+    queryRegistry.adzuna = { provider: "adzuna", async fetchJobs() { return []; } };
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await poll({ sources: [company, query], http, store, notifier: { async notifyBatch() {} } });
+      const lines = spy.mock.calls.map((c) => String(c[0]));
+      expect(lines).toContain("Acme (greenhouse): 0 job(s), 0 new");
+      expect(lines).toContain("ML remote (adzuna): 0 job(s), 0 new");
+    } finally {
+      spy.mockRestore();
+      delete queryRegistry.adzuna;
+      store.close();
+    }
   });
 });

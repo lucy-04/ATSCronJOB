@@ -38,3 +38,21 @@ the `state` branch stays one commit forever (`commit --amend` + `--force-with-le
 Hourly (`cron: '0 * * * *'`, UTC). GitHub may delay scheduled runs under load, and
 disables scheduled workflows after 60 days of repo inactivity — push or run
 manually to re-enable. Adjust cadence by editing the `cron` line.
+
+## Title-search (Adzuna) setup
+
+Query sources in `sources.json` (`"kind": "query"`) search across all companies
+via Adzuna and need a free API key:
+
+1. Sign up at https://developer.adzuna.com/ and create an app to get an
+   **App ID** and **App Key**.
+2. Add both as GitHub repo secrets: Settings → Secrets and variables → Actions →
+   New repository secret → `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`.
+3. For local runs, export them in your shell before `npm start`:
+   ```bash
+   export ADZUNA_APP_ID=... ADZUNA_APP_KEY=...
+   npm start
+   ```
+
+Without the keys, query sources log a per-source error and are skipped; company
+(ATS board) sources still run normally.

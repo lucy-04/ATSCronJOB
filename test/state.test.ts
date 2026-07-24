@@ -1,4 +1,8 @@
 import { describe, it, expect } from "vitest";
+import Database from "better-sqlite3";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createSqliteStore } from "../src/core/state.js";
 import type { Job } from "../src/core/types.js";
 
@@ -65,5 +69,32 @@ describe("prune", () => {
     const found = store.diffAndRecord("gh:acme", [job("1")]); // reappears
     expect(found.map((j) => j.id)).toEqual(["1"]); // source known -> counts as new
     store.close();
+  });
+
+  it("keeps first_seen stable and advances last_seen across runs", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ats-state-test-"));
+    const dbPath = join(dir, "state.db");
+    const T0 = Date.parse("2026-01-01T00:00:00Z");
+    const T1 = Date.parse("2026-01-05T00:00:00Z");
+    let clock = T0;
+
+    try {
+      const store = createSqliteStore({ path: dbPath, now: () => clock });
+      expect(store.diffAndRecord("gh:acme", [job("1")])).toEqual([]); // seeded at T0
+      clock = T1;
+      expect(store.diffAndRecord("gh:acme", [job("1")])).toEqual([]); // unchanged board at T1
+      store.close();
+
+      const db = new Database(dbPath, { readonly: true });
+      const row = db
+        .prepare(`SELECT first_seen, last_seen FROM seen_jobs WHERE source = ? AND job_id = ?`)
+        .get("gh:acme", "1") as { first_seen: string; last_seen: string };
+      db.close();
+
+      expect(row.first_seen).toBe(new Date(T0).toISOString()); // stable, not overwritten
+      expect(row.last_seen).toBe(new Date(T1).toISOString());   // advanced
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

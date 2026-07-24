@@ -53,22 +53,22 @@ export function createSqliteStore(opts: SqliteStoreOptions = {}): StateStore {
   return {
     diffAndRecord(source: string, jobs: Job[]): Job[] {
       const nowIso = new Date(now()).toISOString();
-      // "New source" is tracked in `sources`, NOT by row count — so a source
-      // pruned down to zero jobs is still known, and reappearing jobs re-notify.
-      const isNewSource = sourceExists.get(source) === undefined;
-      if (isNewSource) insertSource.run({ source, now: nowIso });
+      const tx = db.transaction((): Job[] => {
+        // "New source" is tracked in `sources`, NOT by row count — so a source
+        // pruned down to zero jobs is still known, and reappearing jobs re-notify.
+        const isNewSource = sourceExists.get(source) === undefined;
+        if (isNewSource) insertSource.run({ source, now: nowIso });
 
-      const existing = new Set(
-        (selectIds.all(source) as Array<{ job_id: string }>).map((r) => r.job_id),
-      );
-      const newJobs = isNewSource ? [] : jobs.filter((j) => !existing.has(j.id));
+        const existing = new Set(
+          (selectIds.all(source) as Array<{ job_id: string }>).map((r) => r.job_id),
+        );
+        const newJobs = isNewSource ? [] : jobs.filter((j) => !existing.has(j.id));
 
-      const write = db.transaction((items: Job[]) => {
-        for (const j of items) upsert.run({ source, jobId: j.id, now: nowIso });
+        for (const j of jobs) upsert.run({ source, jobId: j.id, now: nowIso });
+
+        return newJobs;
       });
-      write(jobs);
-
-      return newJobs;
+      return tx();
     },
 
     prune(graceDays: number): number {

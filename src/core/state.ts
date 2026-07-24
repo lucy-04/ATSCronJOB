@@ -89,6 +89,9 @@ export function createSqliteStore(opts: SqliteStoreOptions = {}): StateStore {
     },
 
     close(): void {
+      // Fold any WAL writes into state.db and truncate the -wal file, so a
+      // committed state.db (Phase 3 persistence) is always complete on its own.
+      db.pragma("wal_checkpoint(TRUNCATE)");
       db.close();
     },
   };

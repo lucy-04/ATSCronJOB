@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSqliteStore } from "../src/core/state.js";
@@ -118,5 +118,32 @@ describe("prune", () => {
     expect(store.prune(14, ["gh:a"])).toBe(1); // only gh:a
     expect(store.prune(14, ["gh:b"])).toBe(1); // gh:b still there until named
     store.close();
+  });
+});
+
+describe("close (WAL checkpoint)", () => {
+  it("folds WAL writes into the main db file and truncates the -wal file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "state-wal-"));
+    const dbPath = join(dir, "state.db");
+    try {
+      const store = createSqliteStore({ path: dbPath });
+      store.diffAndRecord("gh:acme", [job("1")]);
+      store.close();
+
+      // After a TRUNCATE checkpoint the -wal file is either gone or 0 bytes.
+      const wal = `${dbPath}-wal`;
+      const walSize = existsSync(wal) ? statSync(wal).size : 0;
+      expect(walSize).toBe(0);
+
+      // And the row is readable from the main file alone.
+      const reopened = new Database(dbPath, { readonly: true });
+      const row = reopened
+        .prepare("SELECT job_id FROM seen_jobs WHERE source = ?")
+        .get("gh:acme") as { job_id: string } | undefined;
+      reopened.close();
+      expect(row?.job_id).toBe("1");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

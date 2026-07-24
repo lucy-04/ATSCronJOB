@@ -7,7 +7,9 @@ import { consoleNotifier } from "./notifiers/console.js";
 // Phase 2 entrypoint: load targets, poll each supported source, dedup against
 // persistent SQLite state, and print only newly-seen jobs. Telegram = later phase.
 async function main(): Promise<void> {
-  const store = createSqliteStore();
+  // STATE_DB_PATH lets CI point at the checked-out state branch copy; unset
+  // locally falls through to the store's default of "state.db".
+  const store = createSqliteStore({ path: process.env.STATE_DB_PATH || undefined });
   try {
     await poll({
       targets: loadTargets(),

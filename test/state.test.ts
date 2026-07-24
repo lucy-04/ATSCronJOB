@@ -36,3 +36,34 @@ describe("diffAndRecord", () => {
     store.close();
   });
 });
+
+describe("prune", () => {
+  it("removes jobs not seen within graceDays", () => {
+    let clock = Date.parse("2026-01-01T00:00:00Z");
+    const store = createSqliteStore({ path: ":memory:", now: () => clock });
+    store.diffAndRecord("gh:acme", [job("1")]); // last_seen = Jan 1
+    clock = Date.parse("2026-01-21T00:00:00Z");  // +20 days, job absent from board
+    expect(store.prune(14)).toBe(1);
+    store.close();
+  });
+
+  it("keeps jobs still within graceDays", () => {
+    let clock = Date.parse("2026-01-01T00:00:00Z");
+    const store = createSqliteStore({ path: ":memory:", now: () => clock });
+    store.diffAndRecord("gh:acme", [job("1")]);
+    clock = Date.parse("2026-01-10T00:00:00Z"); // +9 days
+    expect(store.prune(14)).toBe(0);
+    store.close();
+  });
+
+  it("re-notifies a job that reappears after being pruned", () => {
+    let clock = Date.parse("2026-01-01T00:00:00Z");
+    const store = createSqliteStore({ path: ":memory:", now: () => clock });
+    store.diffAndRecord("gh:acme", [job("1")]); // seeded silently
+    clock = Date.parse("2026-01-21T00:00:00Z");
+    store.prune(14);                             // job 1 aged out
+    const found = store.diffAndRecord("gh:acme", [job("1")]); // reappears
+    expect(found.map((j) => j.id)).toEqual(["1"]); // source known -> counts as new
+    store.close();
+  });
+});

@@ -5,8 +5,8 @@ import type { Job } from "./types.js";
 export interface StateStore {
   /** Record all fetched jobs for a source; return only the ones new to us. */
   diffAndRecord(source: string, jobs: Job[]): Job[];
-  /** Remove jobs whose last_seen is older than graceDays; return rows removed. */
-  prune(graceDays: number): number;
+  /** Remove jobs (only for the given sources) whose last_seen is older than graceDays; return rows removed. */
+  prune(graceDays: number, sources: string[]): number;
   close(): void;
 }
 
@@ -48,7 +48,9 @@ export function createSqliteStore(opts: SqliteStoreOptions = {}): StateStore {
     VALUES (@source, @jobId, @now, @now)
     ON CONFLICT(source, job_id) DO UPDATE SET last_seen = @now
   `);
-  const deleteStale = db.prepare(`DELETE FROM seen_jobs WHERE last_seen < @cutoff`);
+  const deleteStaleForSource = db.prepare(
+    `DELETE FROM seen_jobs WHERE source = @source AND last_seen < @cutoff`,
+  );
 
   return {
     diffAndRecord(source: string, jobs: Job[]): Job[] {
@@ -71,9 +73,19 @@ export function createSqliteStore(opts: SqliteStoreOptions = {}): StateStore {
       return tx();
     },
 
-    prune(graceDays: number): number {
+    // Only prunes the given sources — a source whose fetch failed this run is
+    // omitted by the caller, so its jobs are never mistaken for "gone."
+    prune(graceDays: number, sources: string[]): number {
+      if (sources.length === 0) return 0;
       const cutoff = new Date(now() - graceDays * DAY_MS).toISOString();
-      return deleteStale.run({ cutoff }).changes;
+      const run = db.transaction((srcs: string[]): number => {
+        let removed = 0;
+        for (const source of srcs) {
+          removed += deleteStaleForSource.run({ source, cutoff }).changes;
+        }
+        return removed;
+      });
+      return run(sources);
     },
 
     close(): void {

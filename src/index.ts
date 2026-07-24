@@ -1,34 +1,23 @@
-import { getAdapter, supportedAtses } from "./adapters/index.js";
 import { loadTargets } from "./config.js";
 import { createHttpClient } from "./core/http.js";
+import { createSqliteStore } from "./core/state.js";
+import { poll } from "./core/poll.js";
 import { consoleNotifier } from "./notifiers/console.js";
-import type { Notification } from "./core/types.js";
 
-// Phase 1 entrypoint: load targets, fetch each supported one, and print every
-// job to the console. No state, no dedup, no Telegram yet — that's Phase 2+.
+// Phase 2 entrypoint: load targets, poll each supported source, dedup against
+// persistent SQLite state, and print only newly-seen jobs. Telegram = later phase.
 async function main(): Promise<void> {
-  const targets = loadTargets();
-  const supported = new Set(supportedAtses());
-  const http = createHttpClient();
-
-  const found: Notification[] = [];
-
-  for (const target of targets) {
-    if (!supported.has(target.ats)) {
-      console.log(`Skipping ${target.company}: adapter "${target.ats}" not implemented yet.`);
-      continue;
-    }
-    try {
-      const adapter = getAdapter(target.ats);
-      const jobs = await adapter.fetchJobs(target, http);
-      console.log(`${target.company} (${target.ats}): ${jobs.length} job(s)`);
-      for (const job of jobs) found.push({ job, target });
-    } catch (err) {
-      console.error(`  ! ${target.company} failed: ${(err as Error).message}`);
-    }
+  const store = createSqliteStore();
+  try {
+    await poll({
+      targets: loadTargets(),
+      http: createHttpClient(),
+      store,
+      notifier: consoleNotifier,
+    });
+  } finally {
+    store.close();
   }
-
-  await consoleNotifier.notifyBatch(found);
 }
 
 main().catch((err) => {

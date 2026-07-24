@@ -1,25 +1,33 @@
-import type { SimpleTarget, Target } from "../core/types.js";
+import type { CompanySource, Source } from "../core/types.js";
 
-/**
- * Narrow a Target to a SimpleTarget and return its `token`. The registry only
- * ever routes a target to its matching adapter, so this should never throw in
- * normal operation — it guards against a misconfigured registry.
- */
-export function tokenOf(target: Target): string {
-  if (target.ats === "workday") {
-    throw new Error(`Expected a token-based ATS, got workday for "${target.company}"`);
+/** Return the `token` of a token-based company source. */
+export function tokenOf(source: CompanySource): string {
+  if (source.ats === "workday") {
+    throw new Error(`Expected a token-based ATS, got workday for "${source.company}"`);
   }
-  return (target as SimpleTarget).token;
+  return source.token;
+}
+
+/** Lowercase, collapse non-alphanumerics to single dashes, trim dashes. */
+function slug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 /**
- * Stable per-source key derived from the target — NOT the display `company`,
- * so renaming a company never resets its dedup history. Used as the state-store
- * partition key.
+ * Stable per-source key for dedup — NOT the display label, so renaming a
+ * company or a query nickname never resets its dedup history.
  */
-export function sourceKeyOf(target: Target): string {
-  if (target.ats === "workday") {
-    return `${target.ats}:${target.tenant}:${target.site}`;
+export function sourceKeyOf(source: Source): string {
+  if (source.kind === "query") {
+    return `${source.provider}:${slug(source.query)}|${slug(source.where)}|${source.country.toLowerCase()}`;
   }
-  return `${target.ats}:${target.token}`;
+  if (source.ats === "workday") {
+    return `${source.ats}:${source.tenant}:${source.site}`;
+  }
+  return `${source.ats}:${source.token}`;
+}
+
+/** Display name shown in notifications. */
+export function sourceLabel(source: Source): string {
+  return source.kind === "query" ? source.label : source.company;
 }

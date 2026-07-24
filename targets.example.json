@@ -1,7 +1,0 @@
-[
-  { "company": "Stripe", "ats": "greenhouse", "token": "stripe", "tier": 1 },
-  { "company": "Ramp", "ats": "ashby", "token": "ramp", "tier": 1 },
-  { "company": "Netflix", "ats": "lever", "token": "netflix", "tier": 2 },
-  { "company": "Example Co", "ats": "smartrecruiters", "token": "ExampleCo", "tier": 3 },
-  { "company": "Example Startup", "ats": "workable", "token": "examplestartup", "tier": 3 }
-]

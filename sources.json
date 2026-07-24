@@ -1,0 +1,4 @@
+[
+  { "kind": "company", "company": "Stripe", "ats": "greenhouse", "token": "stripe", "tier": 1 },
+  { "kind": "query", "provider": "adzuna", "query": "Machine Learning Engineer", "where": "remote", "country": "us", "label": "ML remote", "tier": 1 }
+]

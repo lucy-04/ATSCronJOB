@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { poll } from "../src/core/poll.js";
 import { createSqliteStore } from "../src/core/state.js";
-import type { HttpClient, Notification, Notifier, Target } from "../src/core/types.js";
+import { sourceLabel } from "../src/adapters/util.js";
+import { queryRegistry } from "../src/adapters/index.js";
+import type { HttpClient, Notification, Notifier, Source } from "../src/core/types.js";
 
 // Returns a Greenhouse-shaped payload for any GET; postJson is never used here.
 function fakeHttp(ids: number[]): HttpClient {
@@ -53,29 +55,34 @@ function capturingNotifier(sink: Notification[]): Notifier {
   };
 }
 
-const target: Target = { company: "Acme", ats: "greenhouse", token: "acme", tier: 1 };
+const source: Source = { kind: "company", company: "Acme", ats: "greenhouse", token: "acme", tier: 1 };
 
 describe("poll", () => {
+  afterEach(() => {
+    delete process.env.ADZUNA_APP_ID;
+    delete process.env.ADZUNA_APP_KEY;
+  });
+
   it("seeds silently on the first run, then notifies only new jobs", async () => {
     const store = createSqliteStore({ path: ":memory:" });
 
     const first: Notification[] = [];
-    await poll({ targets: [target], http: fakeHttp([1]), store, notifier: capturingNotifier(first) });
+    await poll({ sources: [source], http: fakeHttp([1]), store, notifier: capturingNotifier(first) });
     expect(first).toEqual([]); // seeded
 
     const second: Notification[] = [];
-    await poll({ targets: [target], http: fakeHttp([1, 2]), store, notifier: capturingNotifier(second) });
+    await poll({ sources: [source], http: fakeHttp([1, 2]), store, notifier: capturingNotifier(second) });
     expect(second.map((n) => n.job.id)).toEqual(["2"]);
-    expect(second[0]?.target.company).toBe("Acme");
+    expect(sourceLabel(second[0]!.source)).toBe("Acme");
 
     store.close();
   });
 
-  it("skips targets whose ATS has no adapter", async () => {
+  it("skips sources whose ATS has no adapter", async () => {
     const store = createSqliteStore({ path: ":memory:" });
     const sink: Notification[] = [];
-    const lever: Target = { company: "NoAdapter", ats: "lever", token: "x" };
-    await poll({ targets: [lever], http: fakeHttp([1]), store, notifier: capturingNotifier(sink) });
+    const lever: Source = { kind: "company", company: "NoAdapter", ats: "lever", token: "x" };
+    await poll({ sources: [lever], http: fakeHttp([1]), store, notifier: capturingNotifier(sink) });
     expect(sink).toEqual([]);
     store.close();
   });
@@ -83,22 +90,107 @@ describe("poll", () => {
   it("does not prune a source whose fetch failed this run", async () => {
     let clock = Date.parse("2026-01-01T00:00:00Z");
     const store = createSqliteStore({ path: ":memory:", now: () => clock });
-    const a: Target = { company: "A", ats: "greenhouse", token: "a", tier: 1 };
-    const b: Target = { company: "B", ats: "greenhouse", token: "b", tier: 1 };
+    const a: Source = { kind: "company", company: "A", ats: "greenhouse", token: "a", tier: 1 };
+    const b: Source = { kind: "company", company: "B", ats: "greenhouse", token: "b", tier: 1 };
 
     // Run 1 (T0): both boards healthy -> both seed silently.
-    await poll({ targets: [a, b], http: httpFor({ a: [1], b: [1] }), store, notifier: { async notifyBatch() {} } });
+    await poll({ sources: [a, b], http: httpFor({ a: [1], b: [1] }), store, notifier: { async notifyBatch() {} } });
 
     // Run 2 (T0+20d): board A is DOWN, B healthy. A's job (last_seen T0) is now
     // old enough to be prunable, but because A's fetch failed it must NOT be pruned.
     clock = Date.parse("2026-01-21T00:00:00Z");
-    await poll({ targets: [a, b], http: httpFor({ a: "fail", b: [1] }), store, notifier: { async notifyBatch() {} } });
+    await poll({ sources: [a, b], http: httpFor({ a: "fail", b: [1] }), store, notifier: { async notifyBatch() {} } });
 
     // Run 3 (same clock): A recovers with the SAME job id. If A's row had been
     // pruned during its outage, job "1" would resurface as NEW here. It must not.
     const sink: Notification[] = [];
-    await poll({ targets: [a, b], http: httpFor({ a: [1], b: [1] }), store, notifier: capturingNotifier(sink) });
+    await poll({ sources: [a, b], http: httpFor({ a: [1], b: [1] }), store, notifier: capturingNotifier(sink) });
     expect(sink).toEqual([]); // A's job survived the outage -> nothing new
+
+    store.close();
+  });
+
+  it("logs a per-source summary line with the kind detail suffix", async () => {
+    process.env.ADZUNA_APP_ID = "id1";
+    process.env.ADZUNA_APP_KEY = "key1";
+    const store = createSqliteStore({ path: ":memory:" });
+    const company: Source = { kind: "company", company: "Acme", ats: "greenhouse", token: "acme", tier: 1 };
+    const query: Source = {
+      kind: "query",
+      provider: "adzuna",
+      query: "ML",
+      where: "remote",
+      country: "us",
+      label: "ML remote",
+      tier: 1,
+    };
+    const http: HttpClient = {
+      async getJson<T>(url: string): Promise<T> {
+        if (url.includes("/api/jobs/")) return { results: [] } as T;
+        return { jobs: [] } as T;
+      },
+      async postJson<T>(): Promise<T> {
+        throw new Error("unused");
+      },
+    };
+    // Swap in a minimal fake for the query kind so this test only exercises
+    // the summary-line path (not the real Adzuna network shape), then restore
+    // the real registration afterward — other tests in this file depend on
+    // the real adzuna adapter being registered (see adapters/index.ts).
+    const originalAdzuna = queryRegistry.adzuna;
+    queryRegistry.adzuna = { provider: "adzuna", async fetchJobs() { return []; } };
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await poll({ sources: [company, query], http, store, notifier: { async notifyBatch() {} } });
+      const lines = spy.mock.calls.map((c) => String(c[0]));
+      expect(lines).toContain("Acme (greenhouse): 0 job(s), 0 new");
+      expect(lines).toContain("ML remote (adzuna): 0 job(s), 0 new");
+    } finally {
+      spy.mockRestore();
+      queryRegistry.adzuna = originalAdzuna;
+      store.close();
+    }
+  });
+
+  it("polls company and query sources together, deduping each independently", async () => {
+    process.env.ADZUNA_APP_ID = "id1";
+    process.env.ADZUNA_APP_KEY = "key1";
+    const store = createSqliteStore({ path: ":memory:" });
+    const company: Source = { kind: "company", company: "Acme", ats: "greenhouse", token: "acme", tier: 1 };
+    const query: Source = { kind: "query", provider: "adzuna", query: "ML Engineer", where: "remote", country: "us", label: "ML remote", tier: 1 };
+
+    const http: HttpClient = {
+      async getJson<T>(url: string): Promise<T> {
+        if (url.includes("/api/jobs/")) {
+          return { results: [{ id: "a1", title: "ML Engineer", redirect_url: "https://x/a1", location: { display_name: "Remote" }, company: { display_name: "Startup Inc" } }] } as T;
+        }
+        return { jobs: [{ id: 1, title: "Backend", absolute_url: "https://x/1", location: { name: "NYC" } }] } as T;
+      },
+      async postJson<T>(): Promise<T> { throw new Error("unused"); },
+    };
+
+    // Run 1: both seed silently.
+    const s1: Notification[] = [];
+    await poll({ sources: [company, query], http, store, notifier: capturingNotifier(s1) });
+    expect(s1).toEqual([]);
+
+    // Run 2: query returns an extra job; company unchanged. Only the new query job notifies.
+    const http2: HttpClient = {
+      async getJson<T>(url: string): Promise<T> {
+        if (url.includes("/api/jobs/")) {
+          return { results: [
+            { id: "a1", title: "ML Engineer", redirect_url: "https://x/a1", location: { display_name: "Remote" }, company: { display_name: "Startup Inc" } },
+            { id: "a2", title: "Senior ML Engineer", redirect_url: "https://x/a2", location: { display_name: "Remote" }, company: { display_name: "BigCo" } },
+          ] } as T;
+        }
+        return { jobs: [{ id: 1, title: "Backend", absolute_url: "https://x/1", location: { name: "NYC" } }] } as T;
+      },
+      async postJson<T>(): Promise<T> { throw new Error("unused"); },
+    };
+    const s2: Notification[] = [];
+    await poll({ sources: [company, query], http: http2, store, notifier: capturingNotifier(s2) });
+    expect(s2.map((n) => n.job.id)).toEqual(["a2"]);
+    expect(s2[0]?.job.company).toBe("BigCo");
 
     store.close();
   });

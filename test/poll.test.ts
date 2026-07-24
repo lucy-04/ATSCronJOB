@@ -133,9 +133,11 @@ describe("poll", () => {
         throw new Error("unused");
       },
     };
-    // Adzuna's real adapter isn't registered on this branch yet (that's a
-    // separate task); register a minimal fake for the query kind so this test
-    // can exercise the query-source summary-line path end to end via poll().
+    // Swap in a minimal fake for the query kind so this test only exercises
+    // the summary-line path (not the real Adzuna network shape), then restore
+    // the real registration afterward — other tests in this file depend on
+    // the real adzuna adapter being registered (see adapters/index.ts).
+    const originalAdzuna = queryRegistry.adzuna;
     queryRegistry.adzuna = { provider: "adzuna", async fetchJobs() { return []; } };
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
@@ -145,8 +147,51 @@ describe("poll", () => {
       expect(lines).toContain("ML remote (adzuna): 0 job(s), 0 new");
     } finally {
       spy.mockRestore();
-      delete queryRegistry.adzuna;
+      queryRegistry.adzuna = originalAdzuna;
       store.close();
     }
+  });
+
+  it("polls company and query sources together, deduping each independently", async () => {
+    process.env.ADZUNA_APP_ID = "id1";
+    process.env.ADZUNA_APP_KEY = "key1";
+    const store = createSqliteStore({ path: ":memory:" });
+    const company: Source = { kind: "company", company: "Acme", ats: "greenhouse", token: "acme", tier: 1 };
+    const query: Source = { kind: "query", provider: "adzuna", query: "ML Engineer", where: "remote", country: "us", label: "ML remote", tier: 1 };
+
+    const http: HttpClient = {
+      async getJson<T>(url: string): Promise<T> {
+        if (url.includes("/api/jobs/")) {
+          return { results: [{ id: "a1", title: "ML Engineer", redirect_url: "https://x/a1", location: { display_name: "Remote" }, company: { display_name: "Startup Inc" } }] } as T;
+        }
+        return { jobs: [{ id: 1, title: "Backend", absolute_url: "https://x/1", location: { name: "NYC" } }] } as T;
+      },
+      async postJson<T>(): Promise<T> { throw new Error("unused"); },
+    };
+
+    // Run 1: both seed silently.
+    const s1: Notification[] = [];
+    await poll({ sources: [company, query], http, store, notifier: capturingNotifier(s1) });
+    expect(s1).toEqual([]);
+
+    // Run 2: query returns an extra job; company unchanged. Only the new query job notifies.
+    const http2: HttpClient = {
+      async getJson<T>(url: string): Promise<T> {
+        if (url.includes("/api/jobs/")) {
+          return { results: [
+            { id: "a1", title: "ML Engineer", redirect_url: "https://x/a1", location: { display_name: "Remote" }, company: { display_name: "Startup Inc" } },
+            { id: "a2", title: "Senior ML Engineer", redirect_url: "https://x/a2", location: { display_name: "Remote" }, company: { display_name: "BigCo" } },
+          ] } as T;
+        }
+        return { jobs: [{ id: 1, title: "Backend", absolute_url: "https://x/1", location: { name: "NYC" } }] } as T;
+      },
+      async postJson<T>(): Promise<T> { throw new Error("unused"); },
+    };
+    const s2: Notification[] = [];
+    await poll({ sources: [company, query], http: http2, store, notifier: capturingNotifier(s2) });
+    expect(s2.map((n) => n.job.id)).toEqual(["a2"]);
+    expect(s2[0]?.job.company).toBe("BigCo");
+
+    store.close();
   });
 });

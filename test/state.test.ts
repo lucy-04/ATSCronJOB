@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSqliteStore } from "../src/core/state.js";
@@ -47,7 +47,7 @@ describe("prune", () => {
     const store = createSqliteStore({ path: ":memory:", now: () => clock });
     store.diffAndRecord("gh:acme", [job("1")]); // last_seen = Jan 1
     clock = Date.parse("2026-01-21T00:00:00Z");  // +20 days, job absent from board
-    expect(store.prune(14)).toBe(1);
+    expect(store.prune(14, ["gh:acme"])).toBe(1);
     store.close();
   });
 
@@ -56,7 +56,7 @@ describe("prune", () => {
     const store = createSqliteStore({ path: ":memory:", now: () => clock });
     store.diffAndRecord("gh:acme", [job("1")]);
     clock = Date.parse("2026-01-10T00:00:00Z"); // +9 days
-    expect(store.prune(14)).toBe(0);
+    expect(store.prune(14, ["gh:acme"])).toBe(0);
     store.close();
   });
 
@@ -65,7 +65,7 @@ describe("prune", () => {
     const store = createSqliteStore({ path: ":memory:", now: () => clock });
     store.diffAndRecord("gh:acme", [job("1")]); // seeded silently
     clock = Date.parse("2026-01-21T00:00:00Z");
-    store.prune(14);                             // job 1 aged out
+    store.prune(14, ["gh:acme"]);                // job 1 aged out
     const found = store.diffAndRecord("gh:acme", [job("1")]); // reappears
     expect(found.map((j) => j.id)).toEqual(["1"]); // source known -> counts as new
     store.close();
@@ -94,6 +94,73 @@ describe("prune", () => {
       expect(row.first_seen).toBe(new Date(T0).toISOString()); // stable, not overwritten
       expect(row.last_seen).toBe(new Date(T1).toISOString());   // advanced
     } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("prunes nothing when the sources list is empty", () => {
+    let clock = Date.parse("2026-01-01T00:00:00Z");
+    const store = createSqliteStore({ path: ":memory:", now: () => clock });
+    store.diffAndRecord("gh:acme", [job("1")]);
+    clock = Date.parse("2026-01-21T00:00:00Z"); // +20d, would be stale
+    expect(store.prune(14, [])).toBe(0);
+    // proof it was prunable: pruning WITH the source now removes it
+    expect(store.prune(14, ["gh:acme"])).toBe(1);
+    store.close();
+  });
+
+  it("only prunes the sources it is given", () => {
+    let clock = Date.parse("2026-01-01T00:00:00Z");
+    const store = createSqliteStore({ path: ":memory:", now: () => clock });
+    store.diffAndRecord("gh:a", [job("1")]);
+    store.diffAndRecord("gh:b", [job("1")]);
+    clock = Date.parse("2026-01-21T00:00:00Z"); // +20d, both stale
+    expect(store.prune(14, ["gh:a"])).toBe(1); // only gh:a
+    expect(store.prune(14, ["gh:b"])).toBe(1); // gh:b still there until named
+    store.close();
+  });
+});
+
+describe("close (WAL checkpoint)", () => {
+  it("folds WAL writes into the main db file and truncates the -wal file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "state-wal-"));
+    const dbPath = join(dir, "state.db");
+    // A second, idle connection to the SAME on-disk file, kept open across
+    // store.close(). This is the crux of the test: SQLite auto-truncates the
+    // -wal file when the LAST connection closes, regardless of any explicit
+    // checkpoint pragma. With this second connection still open, store.close()
+    // is no longer closing the last connection — so only the store's own
+    // `wal_checkpoint(TRUNCATE)` can zero out the -wal file. Without that
+    // pragma, this test genuinely fails.
+    const idleConn = new Database(dbPath);
+    try {
+      const store = createSqliteStore({ path: dbPath });
+      store.diffAndRecord("gh:acme", [job("1")]);
+
+      // A merely-*opened* second connection doesn't register as a WAL reader
+      // until it actually touches the database — SQLite maps a connection
+      // into the wal-index lazily, on first access. So we issue one cheap,
+      // non-transactional read here (after there's WAL content to see, and
+      // before store.close()) to make idleConn a real second reader without
+      // holding a transaction/snapshot that could block a TRUNCATE checkpoint.
+      idleConn.pragma("user_version");
+
+      store.close();
+
+      // After a TRUNCATE checkpoint the -wal file is either gone or 0 bytes.
+      const wal = `${dbPath}-wal`;
+      const walSize = existsSync(wal) ? statSync(wal).size : 0;
+      expect(walSize).toBe(0);
+
+      // And the row is readable from the main file alone.
+      const reopened = new Database(dbPath, { readonly: true });
+      const row = reopened
+        .prepare("SELECT job_id FROM seen_jobs WHERE source = ?")
+        .get("gh:acme") as { job_id: string } | undefined;
+      reopened.close();
+      expect(row?.job_id).toBe("1");
+    } finally {
+      idleConn.close();
       rmSync(dir, { recursive: true, force: true });
     }
   });

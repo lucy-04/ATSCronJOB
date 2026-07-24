@@ -24,6 +24,7 @@ export async function poll(deps: PollDeps): Promise<void> {
   const graceDays = deps.graceDays ?? DEFAULT_GRACE_DAYS;
   const supported = new Set(supportedAtses());
   const found: Notification[] = [];
+  const okSources: string[] = [];
 
   for (const target of targets) {
     if (!supported.has(target.ats)) {
@@ -33,7 +34,9 @@ export async function poll(deps: PollDeps): Promise<void> {
     try {
       const adapter = getAdapter(target.ats);
       const jobs = await adapter.fetchJobs(target, http);
-      const newJobs = store.diffAndRecord(sourceKeyOf(target), jobs);
+      const source = sourceKeyOf(target);
+      const newJobs = store.diffAndRecord(source, jobs);
+      okSources.push(source);
       console.log(`${target.company} (${target.ats}): ${jobs.length} job(s), ${newJobs.length} new`);
       for (const job of newJobs) found.push({ job, target });
     } catch (err) {
@@ -41,7 +44,7 @@ export async function poll(deps: PollDeps): Promise<void> {
     }
   }
 
-  const removed = store.prune(graceDays);
+  const removed = store.prune(graceDays, okSources);
   if (removed > 0) console.log(`Pruned ${removed} stale job(s).`);
 
   await notifier.notifyBatch(found);

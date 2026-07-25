@@ -17,7 +17,7 @@ matches the user's preferred roles — not every job on the board.
 | What "seed roles" means | A **title filter on company sources** (not Adzuna query sources — the user found Adzuna weak). |
 | Include roles | Software Engineer, Backend Engineer, Full Stack Engineer, AI Engineer, Agentic AI. |
 | Exclude terms | `manager, director, vp, vice president, head of, intern, sales, lead, principal, senior` (user wants non-senior IC roles). "Staff" intentionally NOT excluded. |
-| Match semantics | Case- and punctuation-insensitive substring; matches if title contains ANY include term AND NO exclude term. |
+| Match semantics | Case- and punctuation-insensitive **word-boundary** substring (pad-with-spaces, so "software engineer" won't hit "software engineering manager", nor "vp" hit "devpost"); matches if title contains ANY include term AND NO exclude term. |
 | Filter scope | Applied to **company sources only**, BEFORE dedup. Query sources are self-scoped by their query and are left unfiltered. |
 | Config layout | `sources.json` = where to look (Source[]); new `roles.json` = what to keep (`{include, exclude}`). One purpose per file. |
 | Company seed | ~15–20 AI/tech companies known to use Greenhouse, best-effort board tokens, "verify on first run" (poll already logs per-company failures). |

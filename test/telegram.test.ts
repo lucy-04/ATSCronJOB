@@ -30,6 +30,17 @@ describe("createTelegramNotifier", () => {
     expect(calls).toEqual([]);
   });
 
+  it("escapes a double-quote in the job URL so it can't break out of the href attribute", async () => {
+    const { http, calls } = recorder();
+    await createTelegramNotifier({ token: "T", chatId: "C", http }).notifyBatch([
+      note("Backend Engineer", { url: 'https://x/a"onmouseover="evil' }),
+    ]);
+    const text: string = calls[0]!.body.text;
+    expect(text).toContain('href="https://x/a&quot;onmouseover=&quot;evil"');
+    // The raw quote must not survive inside the attribute value.
+    expect(text).not.toContain('href="https://x/a"onmouseover');
+  });
+
   it("posts to the sendMessage endpoint with the token and chat id", async () => {
     const { http, calls } = recorder();
     await createTelegramNotifier({ token: "SECRET", chatId: "12345", http }).notifyBatch([note("Backend Engineer")]);

@@ -24,12 +24,21 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/**
+ * Escape a value destined for a double-quoted HTML attribute (the href of the
+ * job link). Job URLs come from third-party ATS APIs, so also neutralize `"`
+ * to prevent a stray quote from breaking out of the attribute.
+ */
+function escAttr(s: string): string {
+  return esc(s).replace(/"/g, "&quot;");
+}
+
 function renderJob({ job, source }: Notification): string {
   const tier = source.tier ?? 3;
   const who = job.company ?? sourceLabel(source);
   const dept = job.department ? ` · ${esc(job.department)}` : "";
   const title = esc(job.title);
-  const link = job.url ? `<a href="${esc(job.url)}">${title}</a>` : title;
+  const link = job.url ? `<a href="${escAttr(job.url)}">${title}</a>` : title;
   return `[T${tier}] <b>${esc(who)}</b> — ${link}\n${esc(job.location)}${dept}`;
 }
 

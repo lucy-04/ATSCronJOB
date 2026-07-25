@@ -14,5 +14,13 @@
   { "kind": "company", "company": "Samsara", "ats": "greenhouse", "token": "samsara", "tier": 2 },
   { "kind": "company", "company": "Figma", "ats": "greenhouse", "token": "figma", "tier": 2 },
   { "kind": "company", "company": "Airbnb", "ats": "greenhouse", "token": "airbnb", "tier": 2 },
-  { "kind": "company", "company": "Stripe", "ats": "greenhouse", "token": "stripe", "tier": 2 }
+  { "kind": "company", "company": "Stripe", "ats": "greenhouse", "token": "stripe", "tier": 2 },
+  { "kind": "company", "company": "OpenAI", "ats": "ashby", "token": "openai", "tier": 1 },
+  { "kind": "company", "company": "Cohere", "ats": "ashby", "token": "cohere", "tier": 1 },
+  { "kind": "company", "company": "Perplexity", "ats": "ashby", "token": "perplexity", "tier": 1 },
+  { "kind": "company", "company": "Notion", "ats": "ashby", "token": "notion", "tier": 2 },
+  { "kind": "company", "company": "Ramp", "ats": "ashby", "token": "ramp", "tier": 2 },
+  { "kind": "company", "company": "Plaid", "ats": "ashby", "token": "plaid", "tier": 2 },
+  { "kind": "company", "company": "Benchling", "ats": "ashby", "token": "benchling", "tier": 2 },
+  { "kind": "company", "company": "Linear", "ats": "ashby", "token": "linear", "tier": 2 }
 ]

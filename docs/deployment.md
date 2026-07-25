@@ -71,3 +71,11 @@ Empty or missing `roles.json` = no filtering (every job notifies). Query
 public board API at seed time. If a company later 404s in the run log
 (`! <Company> failed: … 404 …`), its slug changed or it moved ATS — fix the
 token or remove the entry.
+
+## Supported ATSes
+
+- **Greenhouse** — `"ats":"greenhouse"`, `token` = board slug (`boards-api.greenhouse.io/v1/boards/{token}/jobs`).
+- **Ashby** — `"ats":"ashby"`, `token` = job-board slug (`api.ashbyhq.com/posting-api/job-board/{token}`). This is where many AI-first companies post (OpenAI, Cohere, Notion, Ramp, Perplexity, …).
+
+Both are public, key-less APIs. A wrong/renamed token surfaces on the next run as
+`! <Company> failed: … 404 …` without aborting the run — fix or remove the entry.

@@ -230,4 +230,51 @@ describe("poll", () => {
     expect(s2.map((n) => n.job.id)).toEqual(["5"]); // only the new *matching* job; id 4 filtered out, ids 1-3 already handled/filtered
     store.close();
   });
+
+  it("query sources ignore the role filter and notify all new jobs", async () => {
+    process.env.ADZUNA_APP_ID = "id1";
+    process.env.ADZUNA_APP_KEY = "key1";
+    const store = createSqliteStore({ path: ":memory:" });
+    const query: Source = { kind: "query", provider: "adzuna", query: "anything", where: "remote", country: "us", label: "Q", tier: 1 };
+    const roleFilter = { include: ["backend engineer"], exclude: [] };
+
+    // Fake Adzuna adapter that returns jobs whose titles do NOT match the include filter.
+    const fakeAdzunaAdapter = {
+      provider: "adzuna" as const,
+      async fetchJobs() {
+        return [
+          { id: "r1", title: "Recruiter", url: "https://x/r1", location: "Remote" },
+        ];
+      },
+    };
+
+    const originalAdzuna = queryRegistry.adzuna;
+    queryRegistry.adzuna = fakeAdzunaAdapter;
+    try {
+      // Run 1: seed silently.
+      const s1: Notification[] = [];
+      await poll({ sources: [query], store, notifier: capturingNotifier(s1), roleFilter, http: {} as HttpClient });
+      expect(s1).toEqual([]);
+
+      // Run 2: add a NEW query job that does NOT match the include list.
+      // It should still notify, proving query sources bypass the filter.
+      const fakeAdzunaAdapter2 = {
+        provider: "adzuna" as const,
+        async fetchJobs() {
+          return [
+            { id: "r1", title: "Recruiter", url: "https://x/r1", location: "Remote" },
+            { id: "sm1", title: "Sales Manager", url: "https://x/sm1", location: "Remote" }, // does NOT match include: ["backend engineer"]
+          ];
+        },
+      };
+      queryRegistry.adzuna = fakeAdzunaAdapter2;
+      const s2: Notification[] = [];
+      await poll({ sources: [query], store, notifier: capturingNotifier(s2), roleFilter, http: {} as HttpClient });
+      // The new job notifies even though "Sales Manager" does not match the include list.
+      expect(s2.map((n) => n.job.id)).toEqual(["sm1"]);
+    } finally {
+      queryRegistry.adzuna = originalAdzuna;
+      store.close();
+    }
+  });
 });

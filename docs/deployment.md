@@ -56,3 +56,18 @@ via Adzuna and need a free API key:
 
 Without the keys, query sources log a per-source error and are skipped; company
 (ATS board) sources still run normally.
+
+## Role filter (roles.json)
+
+`roles.json` limits which company-board jobs you're notified about, by title:
+- `include` — a job's title must contain one of these (word-boundary, case- and
+  punctuation-insensitive), e.g. "backend engineer".
+- `exclude` — …and none of these (e.g. "manager", "senior").
+
+Empty or missing `roles.json` = no filtering (every job notifies). Query
+(Adzuna) sources are not filtered — they're already scoped by their query.
+
+`sources.json` company tokens are Greenhouse board slugs, verified against the
+public board API at seed time. If a company later 404s in the run log
+(`! <Company> failed: … 404 …`), its slug changed or it moved ATS — fix the
+token or remove the entry.

@@ -79,5 +79,12 @@ export async function poll(deps: PollDeps): Promise<void> {
   const removed = store.prune(graceDays, okSources);
   if (removed > 0) console.log(`Pruned ${removed} stale job(s).`);
 
+  // Deliberately NOT wrapped in try/catch: a delivery failure (e.g. Telegram
+  // returning non-2xx) must propagate so main() exits non-zero. In the cron
+  // workflow that skips the "Persist state" step, so the state branch does not
+  // advance and this batch is re-detected and re-delivered next run
+  // (at-least-once). Swallowing the error would let state persist and silently
+  // drop the batch. Fast-follow: record-after-notify so local `npm start` runs
+  // (which reuse the same local state.db) also get at-least-once delivery.
   await notifier.notifyBatch(found);
 }

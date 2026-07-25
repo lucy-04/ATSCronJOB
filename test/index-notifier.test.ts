@@ -23,9 +23,21 @@ describe("chooseNotifier", () => {
     expect(n).not.toBe(consoleNotifier);
   });
 
-  it("falls back to the console notifier when either secret is absent", () => {
+  it("falls back to the console notifier when both secrets are absent", () => {
     delete process.env.TELEGRAM_BOT_TOKEN;
     delete process.env.TELEGRAM_CHAT_ID;
+    expect(chooseNotifier(http)).toBe(consoleNotifier);
+  });
+
+  it("falls back to console when only the token is set (chat id missing)", () => {
+    process.env.TELEGRAM_BOT_TOKEN = "T";
+    delete process.env.TELEGRAM_CHAT_ID;
+    expect(chooseNotifier(http)).toBe(consoleNotifier);
+  });
+
+  it("falls back to console when only the chat id is set (token missing)", () => {
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    process.env.TELEGRAM_CHAT_ID = "C";
     expect(chooseNotifier(http)).toBe(consoleNotifier);
   });
 });

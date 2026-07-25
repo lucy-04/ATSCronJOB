@@ -4,7 +4,7 @@ import type { Job } from "../src/core/types.js";
 
 const FILTER: RoleFilter = {
   include: ["software engineer", "backend engineer", "full stack engineer", "fullstack engineer", "ai engineer", "agentic ai"],
-  exclude: ["manager", "director", "vp", "vice president", "head of", "intern", "sales", "lead", "principal", "senior"],
+  exclude: ["manager", "director", "vp", "vice president", "head of", "intern", "sales", "lead", "principal", "senior", "sr"],
 };
 
 function job(title: string): Job {
@@ -37,6 +37,15 @@ describe("matchesRole", () => {
   it("does not false-match the short exclude 'vp' inside a word", () => {
     // "devpost" contains the substring "vp" but is not a whole-word 'vp'
     expect(matchesRole("Backend Engineer, Devpost", FILTER)).toBe(true);
+  });
+  it("excludes abbreviated senior titles ('Sr.' / 'Sr') via the 'sr' exclude", () => {
+    // "Sr." normalizes to the whole word "sr" (punctuation collapses to a space)
+    expect(matchesRole("Sr. Software Engineer", FILTER)).toBe(false);
+    expect(matchesRole("Sr Backend Engineer", FILTER)).toBe(false);
+  });
+  it("does not false-match the short exclude 'sr' inside a word", () => {
+    // "SRE" normalizes to "sre" — not a whole-word 'sr'
+    expect(matchesRole("Backend Engineer (SRE)", FILTER)).toBe(true);
   });
   it("empty include list matches everything", () => {
     expect(matchesRole("Anything At All", { include: [], exclude: ["manager"] })).toBe(true);

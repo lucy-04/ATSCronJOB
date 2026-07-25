@@ -79,3 +79,24 @@ token or remove the entry.
 
 Both are public, key-less APIs. A wrong/renamed token surfaces on the next run as
 `! <Company> failed: … 404 …` without aborting the run — fix or remove the entry.
+
+## Telegram notifications
+
+When `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are both set, the poller sends
+new jobs to Telegram instead of printing them; without them it falls back to the
+console (local runs, or CI before you add the secrets).
+
+Setup:
+1. In Telegram, message **@BotFather** → `/newbot` → follow prompts → copy the
+   **bot token** it gives you.
+2. Start a chat with your new bot and send it any message (a bot cannot message
+   you first).
+3. Get your **chat id**: open
+   `https://api.telegram.org/bot<TOKEN>/getUpdates` in a browser and read
+   `result[].message.chat.id` (a number; negative for groups).
+4. Add both as GitHub repo secrets (Settings → Secrets and variables → Actions):
+   `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+5. Locally, export the same two env vars before `npm start` to test delivery.
+
+Messages use HTML formatting and are split to stay within Telegram's
+4096-character per-message limit when a run finds many new roles.

@@ -70,6 +70,17 @@ describe("leverAdapter", () => {
     expect(jobs[1]!.postedAt).toBeUndefined();
   });
 
+  it("omits postedAt for an out-of-range epoch without throwing", async () => {
+    // Beyond JS's ±8.64e15 ms date range: new Date(x).toISOString() would throw
+    // RangeError; the adapter must degrade to no postedAt, not fail the board.
+    const http = fakeHttp([
+      { id: "big", text: "Backend Engineer", hostedUrl: "https://x/big", createdAt: 8.64e15 + 1, categories: {} },
+    ]);
+    const jobs = await leverAdapter.fetchJobs(source, http);
+    expect(jobs[0]!.postedAt).toBeUndefined();
+    expect(jobs[0]!.id).toBe("big");
+  });
+
   it("tolerates a non-array response", async () => {
     const http = fakeHttp({ error: "nope" });
     expect(await leverAdapter.fetchJobs(source, http)).toEqual([]);

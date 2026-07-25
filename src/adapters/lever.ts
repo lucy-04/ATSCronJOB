@@ -16,14 +16,24 @@ interface LeverJob {
   } | null;
 }
 
+/**
+ * Epoch-ms → ISO string, or undefined for anything not a valid date. A finite
+ * number can still be out of JS's ±8.64e15 ms date range, where `.toISOString()`
+ * throws RangeError — so we check `getTime()` first. postedAt is display-only and
+ * never blocks dedup, so a bad timestamp must degrade to undefined, not fail the
+ * whole board's fetch.
+ */
+function toIso(ms: number | null | undefined): string | undefined {
+  if (typeof ms !== "number" || !Number.isFinite(ms)) return undefined;
+  const d = new Date(ms);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
 function normalize(raw: LeverJob): Job {
   const loc = raw.categories?.location?.trim();
   const location = loc || (raw.workplaceType === "remote" ? "Remote" : "Unspecified");
   const department = raw.categories?.department ?? undefined;
-  const postedAt =
-    typeof raw.createdAt === "number" && Number.isFinite(raw.createdAt)
-      ? new Date(raw.createdAt).toISOString()
-      : undefined;
+  const postedAt = toIso(raw.createdAt);
   return {
     id: String(raw.id),
     title: raw.text,

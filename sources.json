@@ -22,5 +22,8 @@
   { "kind": "company", "company": "Ramp", "ats": "ashby", "token": "ramp", "tier": 2 },
   { "kind": "company", "company": "Plaid", "ats": "ashby", "token": "plaid", "tier": 2 },
   { "kind": "company", "company": "Benchling", "ats": "ashby", "token": "benchling", "tier": 2 },
-  { "kind": "company", "company": "Linear", "ats": "ashby", "token": "linear", "tier": 2 }
+  { "kind": "company", "company": "Linear", "ats": "ashby", "token": "linear", "tier": 2 },
+  { "kind": "company", "company": "Palantir", "ats": "lever", "token": "palantir", "tier": 1 },
+  { "kind": "company", "company": "Shield AI", "ats": "lever", "token": "shieldai", "tier": 1 },
+  { "kind": "company", "company": "Spotify", "ats": "lever", "token": "spotify", "tier": 2 }
 ]

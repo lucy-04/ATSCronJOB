@@ -1,0 +1,4 @@
+{
+  "include": ["software engineer", "backend engineer", "full stack engineer", "fullstack engineer", "ai engineer", "agentic ai"],
+  "exclude": ["manager", "director", "vp", "vice president", "head of", "intern", "sales", "lead", "principal", "senior"]
+}

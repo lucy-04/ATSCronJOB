@@ -194,4 +194,40 @@ describe("poll", () => {
 
     store.close();
   });
+
+  it("applies the role filter to company sources (only matching titles notify/record)", async () => {
+    const store = createSqliteStore({ path: ":memory:" });
+    const company: Source = { kind: "company", company: "Acme", ats: "greenhouse", token: "acme", tier: 1 };
+    const roleFilter = { include: ["backend engineer"], exclude: ["senior"] };
+
+    // Board returns a match, a senior (excluded), and an unrelated role.
+    const jobsPayload = {
+      jobs: [
+        { id: 1, title: "Backend Engineer", absolute_url: "https://x/1", location: { name: "Remote" } },
+        { id: 2, title: "Senior Backend Engineer", absolute_url: "https://x/2", location: { name: "Remote" } },
+        { id: 3, title: "Sales Manager", absolute_url: "https://x/3", location: { name: "Remote" } },
+      ],
+    };
+    const http: HttpClient = {
+      async getJson<T>(): Promise<T> { return jobsPayload as T; },
+      async postJson<T>(): Promise<T> { throw new Error("unused"); },
+    };
+
+    // Run 1 seeds silently. Run 2 (unchanged board) notifies nothing.
+    const s1: Notification[] = [];
+    await poll({ sources: [company], http, store, notifier: capturingNotifier(s1), roleFilter });
+    expect(s1).toEqual([]);
+
+    // Add a NEW matching job (id 4) plus a new non-matching one (id 5).
+    const jobs2 = { jobs: [
+      ...jobsPayload.jobs,
+      { id: 4, title: "Full Stack Engineer", absolute_url: "https://x/4", location: { name: "Remote" } }, // not in include -> dropped
+      { id: 5, title: "Backend Engineer, Platform", absolute_url: "https://x/5", location: { name: "Remote" } }, // matches
+    ] };
+    const http2: HttpClient = { async getJson<T>(): Promise<T> { return jobs2 as T; }, async postJson<T>(): Promise<T> { throw new Error("unused"); } };
+    const s2: Notification[] = [];
+    await poll({ sources: [company], http: http2, store, notifier: capturingNotifier(s2), roleFilter });
+    expect(s2.map((n) => n.job.id)).toEqual(["5"]); // only the new *matching* job; id 4 filtered out, ids 1-3 already handled/filtered
+    store.close();
+  });
 });

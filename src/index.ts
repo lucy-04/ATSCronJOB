@@ -1,4 +1,4 @@
-import { loadSources } from "./config.js";
+import { loadSources, loadRoleFilter } from "./config.js";
 import { createHttpClient } from "./core/http.js";
 import { createSqliteStore } from "./core/state.js";
 import { poll } from "./core/poll.js";
@@ -16,6 +16,7 @@ async function main(): Promise<void> {
       http: createHttpClient(),
       store,
       notifier: consoleNotifier,
+      roleFilter: loadRoleFilter(),
     });
   } finally {
     store.close();

@@ -2,6 +2,7 @@ import type { Ats, CompanyAdapter, Provider, QueryAdapter } from "../core/types.
 import { greenhouseAdapter } from "./greenhouse.js";
 import { ashbyAdapter } from "./ashby.js";
 import { leverAdapter } from "./lever.js";
+import { smartRecruitersAdapter } from "./smartrecruiters.js";
 import { adzunaAdapter } from "./adzuna.js";
 
 // Company ATS adapters, keyed by ATS. Others (lever, ashby, …) register here.
@@ -9,6 +10,7 @@ const companyRegistry: Partial<Record<Ats, CompanyAdapter>> = {
   greenhouse: greenhouseAdapter,
   ashby: ashbyAdapter,
   lever: leverAdapter,
+  smartrecruiters: smartRecruitersAdapter,
 };
 
 // Aggregator query adapters, keyed by provider.

@@ -77,6 +77,7 @@ token or remove the entry.
 - **Greenhouse** — `"ats":"greenhouse"`, `token` = board slug (`boards-api.greenhouse.io/v1/boards/{token}/jobs`).
 - **Ashby** — `"ats":"ashby"`, `token` = job-board slug (`api.ashbyhq.com/posting-api/job-board/{token}`). This is where many AI-first companies post (OpenAI, Cohere, Notion, Ramp, Perplexity, …).
 - **Lever** — `"ats":"lever"`, `token` = postings slug (`api.lever.co/v0/postings/{token}?mode=json`). Public, key-less; returns a bare array of postings.
+- **SmartRecruiters** — `"ats":"smartrecruiters"`, `token` = the case-sensitive company identifier (`api.smartrecruiters.com/v1/companies/{token}/postings`). Public, key-less; large enterprises (e.g. ServiceNow, Experian). Only the first 100 postings per company are fetched.
 
 All are public, key-less APIs. A wrong/renamed token surfaces on the next run as
 `! <Company> failed: … 404 …` without aborting the run — fix or remove the entry.

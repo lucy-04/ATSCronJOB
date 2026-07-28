@@ -1,121 +1,113 @@
 # ATS Job Poller — Project Summary
 
-> **Current status (updated 2026-07-25):** the sections below were the original
-> Phase-1 snapshot; the project has since advanced. What's true now:
-> - **Phase 2 (done):** SQLite dedup — reports only newly-seen roles (seed-silently,
->   14-day prune). See `docs/phase-2-explained.md`.
-> - **Phase 3 (done):** hourly GitHub Actions cron persisting `state.db` to an orphan
->   `state` branch. See `docs/deployment.md`.
-> - **Hybrid search (done):** config moved from `targets.json` to **`sources.json`**,
->   which holds both company ATS boards (`"kind":"company"`) and cross-company
->   title/keyword searches via Adzuna (`"kind":"query"`). Loader is `loadSources()`.
-> - Now a git repo on GitHub with a passing `vitest` suite.
->
-> Design/roadmap docs live under `docs/superpowers/`. The original snapshot follows.
+> **Status: updated 2026-07-28.** This document reflects the current state of the
+> project. It replaces the earlier Phase-1 snapshot.
 
 ## What it is
 
-`ats-job-poller` (package name in `package.json`) is a small Node.js/TypeScript
-tool that **polls company Applicant Tracking System (ATS) endpoints and reports
-newly-posted job roles**. The end goal (per the package description) is to push
-new roles to **Telegram**, but the project is currently at an early phase that
-only prints to the console.
+`ats-job-poller` is a small Node.js/TypeScript tool that **polls company Applicant
+Tracking System (ATS) job boards on an hourly schedule, keeps only the roles
+matching a title filter, remembers what it has already seen, and pushes genuinely
+new roles to Telegram**. It runs as a GitHub Actions cron — no server to operate.
 
-- **Runtime:** Node ≥ 20, ESM (`"type": "module"`)
-- **Language:** TypeScript 5.7, strict mode, run directly via `tsx` (no build step yet — `noEmit`)
-- **Dependencies:** `better-sqlite3` (state/dedup store, not wired up yet), `zod` (validation, not wired up yet)
-- **Dev/test:** `vitest`, `tsc --noEmit` for typechecking
-- **Git:** This working copy is **not** a git repo currently (no `.git`). Note: `.gitignore` mentions production state lives on an orphan `state` branch, so a git remote/history exists elsewhere.
+- **Runtime:** Node ≥ 20, ESM (`"type": "module"`), TypeScript 5.7 strict (`noUncheckedIndexedAccess`, `verbatimModuleSyntax`), run via `tsx` (no build step — `noEmit`).
+- **Dependencies:** `better-sqlite3` (dedup state), `zod` (declared; validation not yet wired).
+- **Dev/test:** `vitest` (68 tests across 11 files), `tsc --noEmit` for typechecking.
+- **Repo:** git repo on GitHub (`lucy-04/ATSCronJOB`); production dedup state lives on an orphan `state` branch.
 
 ## Scripts
 
 | Command | What it does |
 |---|---|
-| `npm run dev` / `npm start` | `tsx src/index.ts` — run the poller once |
+| `npm run dev` / `npm start` | `tsx src/index.ts` — run one poll cycle |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | `vitest run` (no tests exist in the tree yet) |
+| `npm test` | `vitest run` |
 
-## How it works today (Phase 1)
+## How it works (end to end)
 
-`src/index.ts` is the entrypoint. On each run it:
+`src/index.ts` runs one cycle:
 
-1. **Loads sources** from `sources.json` (`src/config.ts`, `loadSources()`) — a shape check, not full validation yet.
-2. For each target, looks up an **adapter** by its `ats` field via the registry (`src/adapters/index.ts`).
-3. Skips any ATS with no adapter implemented yet (prints a "not implemented" line).
-4. Calls `adapter.fetchJobs(target, http)` to hit the ATS API and get normalized `Job[]`.
-5. Collects all jobs and hands them to the **console notifier** (`src/notifiers/console.ts`), which sorts by tier then company and prints them.
+1. **Load config** — `loadSources()` reads `sources.json` (the companies to poll); `loadRoleFilter()` reads `roles.json` (which titles to keep).
+2. **Pick the notifier** — `chooseNotifier()` returns the **Telegram** notifier when `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` are set, else the **console** notifier (local runs / CI without secrets).
+3. **Poll** (`src/core/poll.ts`) — for each source: fetch via its adapter, apply the role filter (company sources only, before dedup), diff against the SQLite store, log a per-source summary, and collect the jobs new to us. Per-source failures are isolated — one bad board never aborts the run.
+4. **Dedup + prune** (`src/core/state.ts`) — records seen jobs; re-notifies nothing already seen; prunes jobs gone for >14 days (scoped to sources that fetched OK).
+5. **Notify** — the batch of new jobs is delivered in one operation (Telegram, chunked to the 4096-char limit; or console).
 
-**No persistence, no dedup, no Telegram yet** — every run reports *all* jobs, not just new ones. Those come in later phases.
+**Seed-silently:** a brand-new source's jobs are recorded without notifying on the first run, so adding companies never floods you — only genuinely new postings thereafter alert.
 
 ## Architecture / key files
 
 ```
 src/
-├── index.ts              # Phase 1 entrypoint: load → fetch → print
-├── config.ts             # loadSources(): read + shape-check sources.json
+├── index.ts              # entrypoint: load → chooseNotifier → poll; guarded by isMain
+├── config.ts             # loadSources(), loadRoleFilter() — read + shape-check JSON
 ├── core/
-│   ├── types.ts          # Shared contracts (the stable core of the design)
-│   └── http.ts           # HttpClient factory: UA header, timeout, JSON parse
+│   ├── types.ts          # Source/Job/Adapter/Notifier contracts (the design backbone)
+│   ├── http.ts           # HttpClient factory: UA header, 15s timeout, JSON parse, HttpError
+│   ├── state.ts          # createSqliteStore: diffAndRecord() dedup + prune() (WAL, checkpoint-on-close)
+│   ├── poll.ts           # poll(): fetch → filter → dedup → prune → notify
+│   └── filter.ts         # matchesRole()/filterJobs(): word-boundary title matching
 ├── adapters/
-│   ├── index.ts          # Adapter registry keyed by ATS
-│   ├── greenhouse.ts     # The ONE implemented adapter so far
-│   └── util.ts           # tokenOf(): narrow Target → SimpleTarget token
+│   ├── index.ts          # registries: companyRegistry (by ATS) + queryRegistry (by provider)
+│   ├── util.ts           # tokenOf(), sourceKeyOf() (stable dedup key), sourceLabel()
+│   ├── greenhouse.ts     # ATS adapters — each ~45 lines, one normalize() → Job
+│   ├── ashby.ts
+│   ├── lever.ts
+│   ├── smartrecruiters.ts
+│   └── adzuna.ts         # query (aggregator) adapter — present but dormant (no query sources seeded)
 └── notifiers/
-    └── console.ts        # consoleNotifier: sorted pretty-print (also the fallback notifier)
+    ├── console.ts        # consoleNotifier: sorted pretty-print (fallback)
+    └── telegram.ts       # createTelegramNotifier: HTML, escaped, chunked to 4096
 ```
 
 ### The core contracts (`src/core/types.ts`)
 
-This file is the design's backbone — everything depends on it:
+- **`Source`** — discriminated on `kind`:
+  - **`CompanySource`** (`kind:"company"`) — a specific company's board. Split into `SimpleSource` (token-based: greenhouse/lever/ashby/smartrecruiters/workable, carries `token`, plus optional `country` honoured by SmartRecruiters) and `WorkdaySource` (tenant/dc/site).
+  - **`QuerySource`** (`kind:"query"`) — a cross-company title search via an aggregator (`provider:"adzuna"`, `query`/`where`/`country`). Supported by code, not currently used in `sources.json`.
+- **`Job`** — normalized posting. `id` is the **dedup identity (not a timestamp)**, so a missing `postedAt` never blocks new-job detection. Optional `company`/`department`/`postedAt`.
+- **`CompanyAdapter` / `QueryAdapter`** — `fetchJobs(source, http)`, dispatched by `ats`/`provider`.
+- **`Notifier`** — `notifyBatch(items)`, batched so a burst of new roles is one delivery.
+- **`HttpClient`** — injected `getJson`/`postJson` so every adapter and notifier is testable offline with a fake.
 
-- **`Ats`** — union of supported systems: `greenhouse | lever | ashby | smartrecruiters | workable | workday`.
-- **`Job`** — normalized posting across every ATS. Important detail: `id` is the **dedup identity (not a timestamp)**, so a missing `postedAt` never blocks new-job detection.
-- **`Target`** — discriminated union on `ats`:
-  - `SimpleTarget` — token/slug-based ATSes (greenhouse, lever, ashby, smartrecruiters, workable), carries a single `token`.
-  - `WorkdayTarget` — needs `tenant` + `dc` (the `wdN` shard) + `site`, discovered via DevTools.
-  - `tier?` (default 3) is label/sort-order only.
-- **`HttpClient`** — minimal injected HTTP surface (`getJson`/`postJson`) so tests can supply a fake fixture instead of mocking global fetch or hitting the network.
-- **`Adapter`** — `{ ats, fetchJobs(target, http) }`.
-- **`Notifier`** — `notifyBatch(items)`, deliberately batched so a burst of new roles is throttled as one operation.
+## Adapters & coverage
 
-### HTTP client (`src/core/http.ts`)
+Four **company** ATS adapters are live; each new ATS is a self-contained file plus one registry line (no type/engine changes), because the dedup/filter/prune engine depends only on `Job.id`.
 
-Factory returning an `HttpClient` with an honest identifiable User-Agent, a 15s default timeout (via `AbortController`), and JSON parsing. Throws a typed `HttpError` on non-2xx. Retry/backoff on 429/5xx is explicitly deferred to Phase 5.
+| ATS | API (public, key-less) | Notes |
+|---|---|---|
+| **Greenhouse** | `boards-api.greenhouse.io/v1/boards/{token}/jobs` | Most common; token = board slug |
+| **Ashby** | `api.ashbyhq.com/posting-api/job-board/{token}` | Where most AI labs post |
+| **Lever** | `api.lever.co/v0/postings/{token}?mode=json` | Bare array; title field is `text` |
+| **SmartRecruiters** | `api.smartrecruiters.com/v1/companies/{token}/postings?limit=100` | Case-sensitive token; optional `&country=in`; page-1 only |
 
-### Greenhouse adapter (`src/adapters/greenhouse.ts`)
+**`sources.json` currently has 105 companies** — 60 Greenhouse, 29 Ashby, 8 Lever, 8 SmartRecruiters — spanning big tech, fintech, AI labs (OpenAI, Anthropic, xAI, Cursor, Cognition, Sarvam AI, …), and India-hiring companies (PhonePe, Meesho, CRED, Groww, Sarvam AI; Bosch/Continental India via the SmartRecruiters `country=in` filter).
 
-The only working adapter. Hits `GET boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true` and normalizes each job (id→string, location fallback to "Unspecified", optional department/postedAt).
+The **Adzuna** query adapter (cross-company aggregator search) exists but is dormant — no query sources are seeded (deprioritized as noisy).
 
-## Configuration (`targets.json`)
+## Configuration
 
-An array of target objects. `targets.example.json` shows the full range of ATS types; the live `targets.json` currently has just two, both Greenhouse:
+- **`sources.json`** — the companies to poll (`Source[]`; `sources.example.json` shows the shapes). Committed config.
+- **`roles.json`** — the title filter: `include` (a title must contain one, word-boundary, case/punctuation-insensitive) and `exclude` (and none of these). Current include: software / backend / full stack / fullstack / ai engineer, agentic ai. Exclude: manager, director, vp, vice president, head of, intern, sales, lead, principal, senior, sr. Missing/empty file = no filtering (match all). `roles.example.json` mirrors it.
 
-```json
-[
-  { "company": "Stripe",  "ats": "greenhouse", "token": "stripe", "tier": 1 },
-  { "company": "Airbnb",  "ats": "greenhouse", "token": "airbnb", "tier": 2 }
-]
-```
+## Deployment (the cron)
 
-## Reconstructed roadmap (from in-code phase markers)
+`.github/workflows/poll.yml` runs hourly: checks out code + the `state` branch, runs `npm start` (with `STATE_DB_PATH` pointing at the checked-out `state.db`), then persists the updated `state.db` back to the orphan `state` branch via force-with-lease. Secrets injected into the run step: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (active), and `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` (only needed if query sources are used). Setup details — including creating the Telegram bot and getting a chat id — are in `docs/deployment.md`.
 
-The source comments repeatedly reference numbered phases. Inferred plan:
+## Testing
 
-- **Phase 1 (current):** load targets → fetch supported ATSes → print to console. No state/dedup/Telegram. ✅ implemented for Greenhouse.
-- **Phase 2+:** Add **state + dedup** (the `better-sqlite3` dependency — `state.db`, ignored in git, lives on an orphan `state` branch in production) so only *newly-posted* roles are reported.
-- **Later phases:** Implement the remaining adapters — **lever, ashby, smartrecruiters, workable, workday** — registering each in `src/adapters/index.ts`.
-- **Phase 5:** Full **zod validation** of every target field (replacing the shape-check in `config.ts`), plus **retry/backoff on 429/5xx** in the HTTP client.
-- **Eventually:** A **Telegram notifier** (per the package description) alongside/replacing the console one. The `Notifier` interface and batching design already anticipate this.
+68 vitest tests, all offline (fake `HttpClient`, `:memory:` SQLite, injectable clock): per-adapter normalization + edge cases, the role filter, config loaders, the dedup/prune store (incl. WAL checkpoint), the poll loop (filter + seed-silently + scoped prune + back-compat), and both notifiers.
 
-## Current state & gaps
+## Design/roadmap docs
 
-- Only **1 of 6** ATS adapters implemented (Greenhouse).
-- **No tests** yet despite vitest being configured and the `HttpClient` being designed for injectable fakes.
-- **No dedup/state** — reruns re-report everything.
-- **No Telegram notifier** — only console output exists.
-- **Not currently a git repo** in this directory (state branch / remote history is external).
-- `config.ts` does only a shape check; full validation is pending (Phase 5).
+- `docs/deployment.md` — bootstrap, ATS reference, Telegram setup, role filter.
+- `docs/phase-2-explained.md` — from-scratch walkthrough of the dedup engine.
+- `docs/superpowers/specs/` and `docs/superpowers/plans/` — the per-phase spec → plan history (dedup, cron, hybrid sources, role filter, each adapter, Telegram, SmartRecruiters country).
 
-## Suggested next step
+## Known limitations & next steps
 
-If you're resuming the lost session, the natural continuation is **Phase 2: wiring up `better-sqlite3` state + dedup** so the poller reports only new roles — that's the prerequisite for any useful notifier (Telegram). Adding the first vitest test against the Greenhouse adapter (using a fake `HttpClient`) would also be a low-risk way to lock in current behavior first.
+- **Delivery reliability:** jobs are recorded before Telegram delivery. In the cron this is at-least-once (a failed send fails the run, so state isn't persisted and the batch retries next hour); local `npm start` runs are at-most-once. A `record-after-notify` change (tracked in a `poll.ts` comment) would make local runs at-least-once too.
+- **SmartRecruiters** fetches only the first 100 postings per company (no pagination).
+- **No location filter** — India focus currently relies on India-HQ companies + the SmartRecruiters `country` filter. Companies on closed ATSes (Darwinbox — bot-protected, ruled out) are unreachable directly; an aggregator (Adzuna `country=in`) is the only route to those.
+- **zod validation** of `sources.json`/`roles.json` is declared but not yet wired (currently a shape check).
+- Minor: `byTierThenLabel` is duplicated in `console.ts` and `telegram.ts` (candidate to hoist into `util.ts`).

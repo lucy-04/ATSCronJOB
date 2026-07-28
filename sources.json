@@ -92,5 +92,14 @@
   { "kind": "company", "company": "Lovable", "ats": "ashby", "token": "lovable", "tier": 2 },
   { "kind": "company", "company": "Browserbase", "ats": "ashby", "token": "browserbase", "tier": 2 },
   { "kind": "company", "company": "Langfuse", "ats": "ashby", "token": "langfuse", "tier": 2 },
-  { "kind": "company", "company": "Vapi", "ats": "ashby", "token": "vapi", "tier": 2 }
+  { "kind": "company", "company": "Vapi", "ats": "ashby", "token": "vapi", "tier": 2 },
+  { "kind": "company", "company": "Sarvam AI", "ats": "ashby", "token": "sarvam", "tier": 1 },
+  { "kind": "company", "company": "PhonePe", "ats": "greenhouse", "token": "phonepe", "tier": 2 },
+  { "kind": "company", "company": "Groww", "ats": "greenhouse", "token": "groww", "tier": 2 },
+  { "kind": "company", "company": "Druva", "ats": "greenhouse", "token": "druva", "tier": 2 },
+  { "kind": "company", "company": "Meesho", "ats": "lever", "token": "meesho", "tier": 2 },
+  { "kind": "company", "company": "Porter", "ats": "lever", "token": "porter", "tier": 2 },
+  { "kind": "company", "company": "Mindtickle", "ats": "lever", "token": "mindtickle", "tier": 2 },
+  { "kind": "company", "company": "FamPay", "ats": "lever", "token": "fampay", "tier": 2 },
+  { "kind": "company", "company": "CRED", "ats": "lever", "token": "cred", "tier": 2 }
 ]

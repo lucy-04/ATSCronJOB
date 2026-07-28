@@ -19,6 +19,17 @@ describe("sourceKeyOf", () => {
     expect(sourceKeyOf(a)).toBe("adzuna:ml-engineer|remote|us");
     expect(sourceKeyOf(a)).toBe(sourceKeyOf(b));
   });
+
+  it("keeps the company key unchanged when there is no country", () => {
+    const s: Source = { kind: "company", company: "Bosch", ats: "smartrecruiters", token: "BoschGroup" };
+    expect(sourceKeyOf(s)).toBe("smartrecruiters:BoschGroup");
+  });
+  it("makes a country-scoped source a distinct key (lowercased)", () => {
+    const global: Source = { kind: "company", company: "Bosch", ats: "smartrecruiters", token: "BoschGroup" };
+    const india: Source = { kind: "company", company: "Bosch", ats: "smartrecruiters", token: "BoschGroup", country: "IN" };
+    expect(sourceKeyOf(india)).toBe("smartrecruiters:BoschGroup:in");
+    expect(sourceKeyOf(india)).not.toBe(sourceKeyOf(global));
+  });
 });
 
 describe("sourceLabel", () => {

@@ -40,6 +40,12 @@ interface CompanyCommon {
 export interface SimpleSource extends CompanyCommon {
   ats: "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workable";
   token: string;
+  /**
+   * Optional ISO country code to scope the board to one country. Currently only
+   * SmartRecruiters honours it (its API supports `&country=in`); other adapters
+   * ignore it. A country-scoped source is a distinct dedup identity (see sourceKeyOf).
+   */
+  country?: string;
 }
 
 /** Workday needs tenant + data-center shard + site, discovered via DevTools. */

@@ -85,4 +85,19 @@ describe("smartRecruitersAdapter", () => {
     const http = fakeHttp({});
     expect(await smartRecruitersAdapter.fetchJobs(source, http)).toEqual([]);
   });
+
+  it("adds &country= when the source has a country", async () => {
+    let seen = "";
+    const inSource: CompanySource = { kind: "company", company: "BoschGroup", ats: "smartrecruiters", token: "BoschGroup", country: "in", tier: 2 };
+    const http = fakeHttp({ content: [] }, (u) => (seen = u));
+    await smartRecruitersAdapter.fetchJobs(inSource, http);
+    expect(seen).toBe("https://api.smartrecruiters.com/v1/companies/BoschGroup/postings?limit=100&country=in");
+  });
+
+  it("omits country from the URL when the source has none (unchanged)", async () => {
+    let seen = "";
+    const http = fakeHttp({ content: [] }, (u) => (seen = u));
+    await smartRecruitersAdapter.fetchJobs(source, http); // `source` = ServiceNow, no country
+    expect(seen).toBe("https://api.smartrecruiters.com/v1/companies/ServiceNow/postings?limit=100");
+  });
 });

@@ -24,7 +24,8 @@ export function sourceKeyOf(source: Source): string {
   if (source.ats === "workday") {
     return `${source.ats}:${source.tenant}:${source.site}`;
   }
-  return `${source.ats}:${source.token}`;
+  const key = `${source.ats}:${source.token}`;
+  return source.country ? `${key}:${source.country.toLowerCase()}` : key;
 }
 
 /** Display name shown in notifications. */

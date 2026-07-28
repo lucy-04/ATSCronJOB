@@ -38,7 +38,10 @@ export const smartRecruitersAdapter: CompanyAdapter = {
   ats: "smartrecruiters",
   async fetchJobs(source: CompanySource, http: HttpClient): Promise<Job[]> {
     const token = tokenOf(source);
-    const url = `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(token)}/postings?limit=100`;
+    const country = "country" in source ? source.country : undefined;
+    const params = new URLSearchParams({ limit: "100" });
+    if (country) params.set("country", country);
+    const url = `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(token)}/postings?${params.toString()}`;
     const data = await http.getJson<SmartRecruitersResponse>(url);
     return (data.content ?? []).map((raw) => normalize(raw, token));
   },

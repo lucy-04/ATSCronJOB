@@ -101,5 +101,7 @@
   { "kind": "company", "company": "Porter", "ats": "lever", "token": "porter", "tier": 2 },
   { "kind": "company", "company": "Mindtickle", "ats": "lever", "token": "mindtickle", "tier": 2 },
   { "kind": "company", "company": "FamPay", "ats": "lever", "token": "fampay", "tier": 2 },
-  { "kind": "company", "company": "CRED", "ats": "lever", "token": "cred", "tier": 2 }
+  { "kind": "company", "company": "CRED", "ats": "lever", "token": "cred", "tier": 2 },
+  { "kind": "company", "company": "Bosch India", "ats": "smartrecruiters", "token": "BoschGroup", "country": "in", "tier": 2 },
+  { "kind": "company", "company": "Continental India", "ats": "smartrecruiters", "token": "Continental", "country": "in", "tier": 2 }
 ]

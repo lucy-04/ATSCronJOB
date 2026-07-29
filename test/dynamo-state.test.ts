@@ -44,9 +44,28 @@ describe("createDynamoStore", () => {
     expect(ddbMock.commandCalls(BatchWriteCommand).length).toBe(0);
   });
 
-  it("returns [] for an empty job list without writing", async () => {
+  it("refreshes the marker but writes no job rows for an empty job list", async () => {
     ddbMock.on(GetCommand).resolves({ Item: { pk: "x", sk: "#SOURCE" } });
+    ddbMock.on(BatchWriteCommand).resolves({});
     const result = await store().diffAndRecord("greenhouse:acme", []);
     expect(result).toEqual([]);
+    const written = ddbMock.commandCalls(BatchWriteCommand)
+      .flatMap((c) => (c.args[0].input.RequestItems!["test-table"] ?? []).map((r: any) => r.PutRequest.Item));
+    expect(written.map((i: any) => i.sk)).toEqual(["#SOURCE"]); // marker only, no job rows
+  });
+
+  it("retries a batchWrite when DynamoDB returns UnprocessedItems, until drained", async () => {
+    ddbMock.on(GetCommand).resolves({ Item: undefined }); // new source
+    ddbMock
+      .on(BatchWriteCommand)
+      .resolvesOnce({
+        UnprocessedItems: {
+          [TABLE]: [{ PutRequest: { Item: { pk: "greenhouse:acme", sk: "2" } } }],
+        },
+      })
+      .resolves({});
+    const result = await store().diffAndRecord("greenhouse:acme", [job("1"), job("2")]);
+    expect(result).toEqual([]); // new source seeds silently
+    expect(ddbMock.commandCalls(BatchWriteCommand).length).toBeGreaterThan(1);
   });
 });

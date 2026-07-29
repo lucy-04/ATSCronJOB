@@ -44,11 +44,16 @@ export function createDynamoStore(opts: DynamoStoreOptions): StateStore {
         [table]: group.map((Item) => ({ PutRequest: { Item } })),
       };
       // Retry unprocessed items a bounded number of times.
+      let remaining: unknown[] = [];
       for (let attempt = 0; attempt < 5; attempt++) {
         const res = await client.send(new BatchWriteCommand({ RequestItems: requestItems as never }));
-        const unprocessed = res.UnprocessedItems?.[table];
-        if (!unprocessed || unprocessed.length === 0) break;
-        requestItems = { [table]: unprocessed as unknown[] };
+        const unprocessed = res?.UnprocessedItems?.[table];
+        remaining = unprocessed ?? [];
+        if (remaining.length === 0) break;
+        requestItems = { [table]: remaining };
+      }
+      if (remaining.length > 0) {
+        console.warn(`DynamoDB batchWrite left ${remaining.length} unprocessed item(s) after retries`);
       }
     }
   }
@@ -62,9 +67,12 @@ export function createDynamoStore(opts: DynamoStoreOptions): StateStore {
         const res = await client.send(
           new BatchGetCommand({ RequestItems: { [table]: { Keys: keys } } as never }),
         );
-        for (const item of (res.Responses?.[table] ?? []) as Array<{ sk: string }>) found.add(item.sk);
-        const un = (res.UnprocessedKeys?.[table] as { Keys?: Array<{ sk: string }> } | undefined)?.Keys;
+        for (const item of (res?.Responses?.[table] ?? []) as Array<{ sk: string }>) found.add(item.sk);
+        const un = (res?.UnprocessedKeys?.[table] as { Keys?: Array<{ sk: string }> } | undefined)?.Keys;
         keys = (un as typeof keys) ?? [];
+      }
+      if (keys.length > 0) {
+        console.warn(`DynamoDB batchGet left ${keys.length} unprocessed key(s) after retries`);
       }
     }
     return found;
@@ -90,7 +98,10 @@ export function createDynamoStore(opts: DynamoStoreOptions): StateStore {
         return [];
       }
       if (jobs.length === 0) {
-        // Nothing to diff or record; leave the marker/TTL untouched.
+        // No jobs to diff, but the source is still active: refresh the marker's
+        // TTL so a known source with a dry spell doesn't age out and get
+        // mistaken for new (and silently reseeded) later.
+        await batchWrite([marker]);
         return [];
       }
       const existing = await existingIds(source, jobs.map((j) => j.id));

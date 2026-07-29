@@ -17,8 +17,11 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1097.0",
+    "@aws-sdk/lib-dynamodb": "^3.1097.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.0",
+    "aws-sdk-client-mock": "^4.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

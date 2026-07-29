@@ -33,7 +33,7 @@ resource "aws_iam_role_policy" "lambda_inline" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["dynamodb:GetItem", "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem", "dynamodb:PutItem"]
+        Action   = ["dynamodb:GetItem", "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem"]
         Resource = aws_dynamodb_table.state.arn
       },
       {

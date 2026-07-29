@@ -3,8 +3,6 @@ variable "region" {
   default = "ap-south-1"
 }
 
-variable "grace_days" {
-  type        = number
-  description = "Dedup TTL window in days (must match the Lambda's default of 14)."
-  default     = 14
-}
+# The dedup TTL window (14 days) is owned by the Lambda code (createDynamoStore's
+# graceDays default). It is intentionally NOT a Terraform variable here, to avoid a
+# silent drift trap where a TF value diverges from the code's actual TTL.

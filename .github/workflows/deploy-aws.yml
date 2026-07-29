@@ -1,0 +1,46 @@
+name: deploy-aws
+
+# MANUAL ONLY, by design. This is the isolated AWS lab on the aws-deploy branch.
+# There is NO push trigger — pushing code never provisions AWS. Run it yourself
+# from the Actions tab when you want to stand the lab up. Production polling stays
+# on the GitHub Actions cron in .github/workflows/poll.yml (untouched).
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write # required for OIDC role assumption
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ap-south-1
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      DEPLOY_ROLE_ARN: ${{ vars.DEPLOY_ROLE_ARN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run bundle # produces dist/lambda.mjs + copies sources.json/roles.json
+
+      - name: Configure AWS credentials (OIDC — no static keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform apply (app stack)
+        run: |
+          terraform -chdir=infra/app init \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="region=$AWS_REGION"
+          terraform -chdir=infra/app apply -auto-approve

@@ -10,7 +10,9 @@
     "dev": "tsx src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prebundle": "mkdir -p dist && cp sources.json roles.json dist/",
+    "bundle": "esbuild src/lambda.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/lambda.mjs --external:@aws-sdk/*"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",
@@ -18,10 +20,12 @@
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1097.0",
+    "@aws-sdk/client-ssm": "^3.1097.0",
     "@aws-sdk/lib-dynamodb": "^3.1097.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.0",
     "aws-sdk-client-mock": "^4.1.0",
+    "esbuild": "^0.28.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax. Tasks 1–3 are code (TDD, testable locally). Task 4–5 are IaC/CI/docs (verified by `terraform validate`/`fmt` and review; the operator runs `terraform apply`).
 
-**Goal:** Run the poller on AWS Lambda (hourly via EventBridge) with DynamoDB dedup state, provisioned by Terraform and deployed from GitHub Actions via OIDC — reusing the existing poll/filter/adapter/Telegram engine unchanged. Monitoring is Plan 2.
+**Goal:** Run the poller on AWS Lambda (hourly via EventBridge) with DynamoDB dedup state, provisioned by Terraform and deployed **manually** from GitHub Actions via OIDC — reusing the existing poll/filter/adapter/Telegram engine unchanged. Monitoring is Plan 2.
 
-**Architecture:** Add a `createDynamoStore()` implementing the existing `StateStore` contract (promisified to async), a thin `src/lambda.ts` handler that reads Telegram secrets from SSM, an esbuild bundle, and Terraform in two tiers (`infra/bootstrap` once, `infra/app` per-deploy). Local `npm start` keeps using SQLite; Lambda uses DynamoDB.
+> **ISOLATION (important):** This is an **isolated hands-on/resume lab built entirely on the `aws-deploy` branch**. It is NEVER merged to `main`. The **production poller stays exactly as-is on `main`** — the GitHub Actions **hourly cron with SQLite** is untouched; this plan does NOT disable it. AWS deploys are **manual only** (`workflow_dispatch`) — pushing code NEVER provisions anything. The stack has **zero idle-cost resources** (no VPC/RDS/NAT/ALB — only Lambda + DynamoDB on-demand + EventBridge + SSM), so it sits at ~$0, and a one-command `terraform destroy` tears it all down after the hands-on session.
+
+**Architecture:** Add a `createDynamoStore()` implementing the existing `StateStore` contract (promisified to async), a thin `src/lambda.ts` handler that reads Telegram secrets from SSM, an esbuild bundle, and Terraform in two tiers (`infra/bootstrap` once, `infra/app` per-deploy). Local `npm start` keeps using SQLite; Lambda uses DynamoDB. All changes land on `aws-deploy`, never `main`.
 
 **Tech Stack:** TypeScript (ESM, strict), AWS SDK v3 (`@aws-sdk/lib-dynamodb`, `@aws-sdk/client-ssm`), esbuild, Terraform, GitHub Actions OIDC, vitest, `aws-sdk-client-mock`.
 
@@ -510,7 +512,8 @@ resource "aws_iam_role" "deploy" {
       Action = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/main" }
+        # Deploys run manually from the aws-deploy branch (the lab lives there, not main).
+        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/aws-deploy" }
       }
     }]
   })
@@ -670,11 +673,12 @@ git commit -m "feat: Terraform for AWS core deploy (bootstrap + app stack)"
 
 ---
 
-### Task 5: CI/CD deploy workflow, disable old cron, operator runbook
+### Task 5: Manual CI/CD deploy workflow + operator runbook (with teardown)
 
 **Files:**
-- Create: `.github/workflows/deploy.yml`, `docs/aws-deployment.md`
-- Modify: `.github/workflows/poll.yml` (disable the hourly cron), `package.json` (add a `prebundle` copy step)
+- Create: `.github/workflows/deploy-aws.yml`, `docs/aws-deployment.md`
+- Modify: `package.json` (add a `prebundle` copy step)
+- **Do NOT modify `.github/workflows/poll.yml`** — the production hourly cron stays exactly as-is. This lab never disables it.
 
 **Interfaces:**
 - Consumes: `infra/app` Terraform, `npm run bundle`, the bootstrap outputs (deploy role ARN, state bucket).
@@ -688,15 +692,13 @@ The Lambda handler reads `sources.json`/`roles.json` from cwd, so they must be i
 ```
 (`npm run bundle` triggers `prebundle` automatically.) Re-run `npm run bundle` and confirm `dist/` contains `lambda.mjs`, `sources.json`, `roles.json`.
 
-- [ ] **Step 2: Write `.github/workflows/deploy.yml`**
+- [ ] **Step 2: Write `.github/workflows/deploy-aws.yml` (MANUAL trigger only)**
 
+The workflow runs ONLY when you click "Run workflow" — never on push — so merging/pushing AWS code cannot provision anything.
 ```yaml
-name: deploy
+name: deploy-aws
 on:
-  push:
-    branches: [main]
-    paths: ["src/**", "infra/**", "sources.json", "roles.json", "package.json", ".github/workflows/deploy.yml"]
-  workflow_dispatch:
+  workflow_dispatch:      # manual only — NO push trigger, by design (isolated lab)
 permissions:
   id-token: write   # for OIDC
   contents: read
@@ -725,19 +727,26 @@ jobs:
           terraform -chdir=infra/app apply -auto-approve
 ```
 
-- [ ] **Step 3: Disable the old poll cron in `.github/workflows/poll.yml`**
+- [ ] **Step 3: Leave `.github/workflows/poll.yml` untouched**
 
-Comment out (or remove) the `schedule:` trigger so it no longer runs hourly, keeping `workflow_dispatch` for manual/local fallback. Add a comment: `# Hourly polling moved to AWS Lambda (see docs/aws-deployment.md). Manual-only now.`
+Do NOT modify it. The production hourly GitHub Actions cron (SQLite → orphan `state` branch) remains the live poller. This lab is additive and parallel; it never replaces or disables production. (This step is a deliberate no-op to make the intent explicit to reviewers.)
 
-- [ ] **Step 4: Write `docs/aws-deployment.md` (operator runbook)**
+- [ ] **Step 4: Write `docs/aws-deployment.md` (operator runbook, incl. teardown)**
 
-Include, as copy-paste commands: install AWS CLI + Terraform; `aws configure` with an admin/bootstrap user; `terraform -chdir=infra/bootstrap init && terraform -chdir=infra/bootstrap apply -var github_repo=lucy-04/ATSCronJOB -var state_bucket_name=<unique>`; capture the `deploy_role_arn` + `state_bucket_name` outputs; set GitHub repo **variables** `DEPLOY_ROLE_ARN` and `TF_STATE_BUCKET`; put secrets `aws ssm put-parameter --name /ats-poller/telegram-bot-token --type SecureString --value <token> --overwrite` (and chat id); first app deploy either by pushing to main or `npm run bundle && terraform -chdir=infra/app init -backend-config=... && terraform -chdir=infra/app apply`; smoke test `aws lambda invoke --function-name ats-poller /dev/stdout` twice (first seeds silently, second delivers); inspect the DynamoDB table (`aws dynamodb scan --table-name ats-poller-state --max-items 5`). Note the ~$0 cost and the ap-south-1 region.
+Include, as copy-paste commands, framed as "an isolated lab you stand up, verify, then tear down":
+- **Prereqs:** install AWS CLI + Terraform; `aws configure` with an admin/bootstrap user; confirm you're on the `aws-deploy` branch.
+- **Bootstrap (once):** `terraform -chdir=infra/bootstrap init && terraform -chdir=infra/bootstrap apply -var github_repo=lucy-04/ATSCronJOB -var state_bucket_name=<globally-unique>`; capture the `deploy_role_arn` + `state_bucket_name` outputs; set GitHub repo **variables** `DEPLOY_ROLE_ARN` and `TF_STATE_BUCKET`.
+- **Secrets:** `aws ssm put-parameter --name /ats-poller/telegram-bot-token --type SecureString --value <token> --overwrite` and the same for `/ats-poller/telegram-chat-id`.
+- **Deploy:** either run the `deploy-aws` workflow manually from the `aws-deploy` branch (Actions tab → Run workflow), OR locally `npm run bundle && terraform -chdir=infra/app init -backend-config="bucket=<bucket>" -backend-config="region=ap-south-1" && terraform -chdir=infra/app apply`.
+- **Smoke test:** `aws lambda invoke --function-name ats-poller /dev/stdout` twice (first seeds DynamoDB silently, second delivers to Telegram); `aws dynamodb scan --table-name ats-poller-state --max-items 5` to see items with a future `expires_at`.
+- **TEARDOWN (do this when done to guarantee $0):** `terraform -chdir=infra/app destroy` then `terraform -chdir=infra/bootstrap destroy` (empty the S3 state bucket first if destroy complains). State it explicitly: the stack has no idle-cost resources, so even without teardown it's ~$0, but destroying removes everything.
+- Note the `ap-south-1` (Mumbai) region and that **production polling is unaffected** — it keeps running on the GitHub Actions cron regardless of this lab.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add .github/workflows/deploy.yml .github/workflows/poll.yml docs/aws-deployment.md package.json
-git commit -m "feat: CI/CD deploy workflow (OIDC), disable old cron, operator runbook"
+git add .github/workflows/deploy-aws.yml docs/aws-deployment.md package.json
+git commit -m "feat: manual AWS deploy workflow (OIDC) + operator runbook with teardown"
 ```
 
 ---
@@ -751,7 +760,7 @@ git commit -m "feat: CI/CD deploy workflow (OIDC), disable old cron, operator ru
 - SSM secrets, Lambda reads at runtime → Task 3 (`secrets.ts`, handler) + Task 4 (params + IAM). ✓
 - esbuild bundle, no native deps → Task 3 (bundle + grep check). ✓
 - Terraform bootstrap (S3 state + OIDC + deploy role) + app stack → Task 4. ✓
-- CI/CD via OIDC, disable old cron → Task 5. ✓
+- CI/CD via OIDC (manual `workflow_dispatch` only) → Task 5. ✓ **Supersedes the spec's "move/disable old cron":** per the user's decision this is an isolated lab on the `aws-deploy` branch — the production GitHub cron on `main` is NOT disabled, and deploys never run on push. ✓
 - Reuse engine unchanged → only `poll.ts` gains awaits (Task 1); adapters/filter/notifier untouched. ✓
 - Monitoring → intentionally deferred to Plan 2 (CloudWatch alarms/SNS/dashboard/EMF). ✓ (out of scope here)
 

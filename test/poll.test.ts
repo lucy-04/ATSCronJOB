@@ -75,7 +75,7 @@ describe("poll", () => {
     expect(second.map((n) => n.job.id)).toEqual(["2"]);
     expect(sourceLabel(second[0]!.source)).toBe("Acme");
 
-    store.close();
+    await store.close();
   });
 
   it("skips sources whose ATS has no adapter", async () => {
@@ -84,7 +84,7 @@ describe("poll", () => {
     const lever: Source = { kind: "company", company: "NoAdapter", ats: "lever", token: "x" };
     await poll({ sources: [lever], http: fakeHttp([1]), store, notifier: capturingNotifier(sink) });
     expect(sink).toEqual([]);
-    store.close();
+    await store.close();
   });
 
   it("does not prune a source whose fetch failed this run", async () => {
@@ -107,7 +107,7 @@ describe("poll", () => {
     await poll({ sources: [a, b], http: httpFor({ a: [1], b: [1] }), store, notifier: capturingNotifier(sink) });
     expect(sink).toEqual([]); // A's job survived the outage -> nothing new
 
-    store.close();
+    await store.close();
   });
 
   it("logs a per-source summary line with the kind detail suffix", async () => {
@@ -148,7 +148,7 @@ describe("poll", () => {
     } finally {
       spy.mockRestore();
       queryRegistry.adzuna = originalAdzuna;
-      store.close();
+      await store.close();
     }
   });
 
@@ -192,7 +192,7 @@ describe("poll", () => {
     expect(s2.map((n) => n.job.id)).toEqual(["a2"]);
     expect(s2[0]?.job.company).toBe("BigCo");
 
-    store.close();
+    await store.close();
   });
 
   it("applies the role filter to company sources (only matching titles notify/record)", async () => {
@@ -228,7 +228,7 @@ describe("poll", () => {
     const s2: Notification[] = [];
     await poll({ sources: [company], http: http2, store, notifier: capturingNotifier(s2), roleFilter });
     expect(s2.map((n) => n.job.id)).toEqual(["5"]); // only the new *matching* job; id 4 filtered out, ids 1-3 already handled/filtered
-    store.close();
+    await store.close();
   });
 
   it("query sources ignore the role filter and notify all new jobs", async () => {
@@ -274,7 +274,7 @@ describe("poll", () => {
       expect(s2.map((n) => n.job.id)).toEqual(["sm1"]);
     } finally {
       queryRegistry.adzuna = originalAdzuna;
-      store.close();
+      await store.close();
     }
   });
 });

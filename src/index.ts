@@ -23,7 +23,7 @@ async function main(): Promise<void> {
       roleFilter: loadRoleFilter(),
     });
   } finally {
-    store.close();
+    await store.close();
   }
 }
 

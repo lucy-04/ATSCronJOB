@@ -4,10 +4,10 @@ import type { Job } from "./types.js";
 /** Persistent record of which jobs we've already seen, for dedup. */
 export interface StateStore {
   /** Record all fetched jobs for a source; return only the ones new to us. */
-  diffAndRecord(source: string, jobs: Job[]): Job[];
+  diffAndRecord(source: string, jobs: Job[]): Promise<Job[]>;
   /** Remove jobs (only for the given sources) whose last_seen is older than graceDays; return rows removed. */
-  prune(graceDays: number, sources: string[]): number;
-  close(): void;
+  prune(graceDays: number, sources: string[]): Promise<number>;
+  close(): Promise<void>;
 }
 
 export interface SqliteStoreOptions {
@@ -53,7 +53,7 @@ export function createSqliteStore(opts: SqliteStoreOptions = {}): StateStore {
   );
 
   return {
-    diffAndRecord(source: string, jobs: Job[]): Job[] {
+    async diffAndRecord(source: string, jobs: Job[]): Promise<Job[]> {
       const nowIso = new Date(now()).toISOString();
       const tx = db.transaction((): Job[] => {
         // "New source" is tracked in `sources`, NOT by row count — so a source
@@ -75,7 +75,7 @@ export function createSqliteStore(opts: SqliteStoreOptions = {}): StateStore {
 
     // Only prunes the given sources — a source whose fetch failed this run is
     // omitted by the caller, so its jobs are never mistaken for "gone."
-    prune(graceDays: number, sources: string[]): number {
+    async prune(graceDays: number, sources: string[]): Promise<number> {
       if (sources.length === 0) return 0;
       const cutoff = new Date(now() - graceDays * DAY_MS).toISOString();
       const run = db.transaction((srcs: string[]): number => {
@@ -88,7 +88,7 @@ export function createSqliteStore(opts: SqliteStoreOptions = {}): StateStore {
       return run(sources);
     },
 
-    close(): void {
+    async close(): Promise<void> {
       // Fold any WAL writes into state.db and truncate the -wal file, so a
       // committed state.db (Phase 3 persistence) is always complete on its own.
       db.pragma("wal_checkpoint(TRUNCATE)");

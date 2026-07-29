@@ -67,7 +67,7 @@ export async function poll(deps: PollDeps): Promise<void> {
         jobs = filterJobs(jobs, roleFilter);
       }
       const key = sourceKeyOf(source);
-      const newJobs = store.diffAndRecord(key, jobs);
+      const newJobs = await store.diffAndRecord(key, jobs);
       okSources.push(key);
       console.log(`${label} (${sourceDetail(source)}): ${jobs.length} job(s), ${newJobs.length} new`);
       for (const job of newJobs) found.push({ job, source });
@@ -76,7 +76,7 @@ export async function poll(deps: PollDeps): Promise<void> {
     }
   }
 
-  const removed = store.prune(graceDays, okSources);
+  const removed = await store.prune(graceDays, okSources);
   if (removed > 0) console.log(`Pruned ${removed} stale job(s).`);
 
   // Deliberately NOT wrapped in try/catch: a delivery failure (e.g. Telegram

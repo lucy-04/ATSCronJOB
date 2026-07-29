@@ -11,67 +11,67 @@ function job(id: string): Job {
 }
 
 describe("diffAndRecord", () => {
-  it("seeds silently on a source's first run", () => {
+  it("seeds silently on a source's first run", async () => {
     const store = createSqliteStore({ path: ":memory:" });
-    expect(store.diffAndRecord("gh:acme", [job("1"), job("2")])).toEqual([]);
-    store.close();
+    expect(await store.diffAndRecord("gh:acme", [job("1"), job("2")])).toEqual([]);
+    await store.close();
   });
 
-  it("detects a newly-added job on a later run", () => {
+  it("detects a newly-added job on a later run", async () => {
     const store = createSqliteStore({ path: ":memory:" });
-    store.diffAndRecord("gh:acme", [job("1"), job("2")]);
-    const found = store.diffAndRecord("gh:acme", [job("1"), job("2"), job("3")]);
+    await store.diffAndRecord("gh:acme", [job("1"), job("2")]);
+    const found = await store.diffAndRecord("gh:acme", [job("1"), job("2"), job("3")]);
     expect(found.map((j) => j.id)).toEqual(["3"]);
-    store.close();
+    await store.close();
   });
 
-  it("returns nothing when the board is unchanged", () => {
+  it("returns nothing when the board is unchanged", async () => {
     const store = createSqliteStore({ path: ":memory:" });
-    store.diffAndRecord("gh:acme", [job("1")]);
-    expect(store.diffAndRecord("gh:acme", [job("1")])).toEqual([]);
-    store.close();
+    await store.diffAndRecord("gh:acme", [job("1")]);
+    expect(await store.diffAndRecord("gh:acme", [job("1")])).toEqual([]);
+    await store.close();
   });
 
-  it("tracks each source independently", () => {
+  it("tracks each source independently", async () => {
     const store = createSqliteStore({ path: ":memory:" });
-    store.diffAndRecord("gh:acme", [job("1")]);          // acme seeded
-    const found = store.diffAndRecord("gh:other", [job("1")]); // other's first run
+    await store.diffAndRecord("gh:acme", [job("1")]);          // acme seeded
+    const found = await store.diffAndRecord("gh:other", [job("1")]); // other's first run
     expect(found).toEqual([]);                            // seeded, not "already seen"
-    store.close();
+    await store.close();
   });
 });
 
 describe("prune", () => {
-  it("removes jobs not seen within graceDays", () => {
+  it("removes jobs not seen within graceDays", async () => {
     let clock = Date.parse("2026-01-01T00:00:00Z");
     const store = createSqliteStore({ path: ":memory:", now: () => clock });
-    store.diffAndRecord("gh:acme", [job("1")]); // last_seen = Jan 1
+    await store.diffAndRecord("gh:acme", [job("1")]); // last_seen = Jan 1
     clock = Date.parse("2026-01-21T00:00:00Z");  // +20 days, job absent from board
-    expect(store.prune(14, ["gh:acme"])).toBe(1);
-    store.close();
+    expect(await store.prune(14, ["gh:acme"])).toBe(1);
+    await store.close();
   });
 
-  it("keeps jobs still within graceDays", () => {
+  it("keeps jobs still within graceDays", async () => {
     let clock = Date.parse("2026-01-01T00:00:00Z");
     const store = createSqliteStore({ path: ":memory:", now: () => clock });
-    store.diffAndRecord("gh:acme", [job("1")]);
+    await store.diffAndRecord("gh:acme", [job("1")]);
     clock = Date.parse("2026-01-10T00:00:00Z"); // +9 days
-    expect(store.prune(14, ["gh:acme"])).toBe(0);
-    store.close();
+    expect(await store.prune(14, ["gh:acme"])).toBe(0);
+    await store.close();
   });
 
-  it("re-notifies a job that reappears after being pruned", () => {
+  it("re-notifies a job that reappears after being pruned", async () => {
     let clock = Date.parse("2026-01-01T00:00:00Z");
     const store = createSqliteStore({ path: ":memory:", now: () => clock });
-    store.diffAndRecord("gh:acme", [job("1")]); // seeded silently
+    await store.diffAndRecord("gh:acme", [job("1")]); // seeded silently
     clock = Date.parse("2026-01-21T00:00:00Z");
-    store.prune(14, ["gh:acme"]);                // job 1 aged out
-    const found = store.diffAndRecord("gh:acme", [job("1")]); // reappears
+    await store.prune(14, ["gh:acme"]);                // job 1 aged out
+    const found = await store.diffAndRecord("gh:acme", [job("1")]); // reappears
     expect(found.map((j) => j.id)).toEqual(["1"]); // source known -> counts as new
-    store.close();
+    await store.close();
   });
 
-  it("keeps first_seen stable and advances last_seen across runs", () => {
+  it("keeps first_seen stable and advances last_seen across runs", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ats-state-test-"));
     const dbPath = join(dir, "state.db");
     const T0 = Date.parse("2026-01-01T00:00:00Z");
@@ -80,10 +80,10 @@ describe("prune", () => {
 
     try {
       const store = createSqliteStore({ path: dbPath, now: () => clock });
-      expect(store.diffAndRecord("gh:acme", [job("1")])).toEqual([]); // seeded at T0
+      expect(await store.diffAndRecord("gh:acme", [job("1")])).toEqual([]); // seeded at T0
       clock = T1;
-      expect(store.diffAndRecord("gh:acme", [job("1")])).toEqual([]); // unchanged board at T1
-      store.close();
+      expect(await store.diffAndRecord("gh:acme", [job("1")])).toEqual([]); // unchanged board at T1
+      await store.close();
 
       const db = new Database(dbPath, { readonly: true });
       const row = db
@@ -98,31 +98,31 @@ describe("prune", () => {
     }
   });
 
-  it("prunes nothing when the sources list is empty", () => {
+  it("prunes nothing when the sources list is empty", async () => {
     let clock = Date.parse("2026-01-01T00:00:00Z");
     const store = createSqliteStore({ path: ":memory:", now: () => clock });
-    store.diffAndRecord("gh:acme", [job("1")]);
+    await store.diffAndRecord("gh:acme", [job("1")]);
     clock = Date.parse("2026-01-21T00:00:00Z"); // +20d, would be stale
-    expect(store.prune(14, [])).toBe(0);
+    expect(await store.prune(14, [])).toBe(0);
     // proof it was prunable: pruning WITH the source now removes it
-    expect(store.prune(14, ["gh:acme"])).toBe(1);
-    store.close();
+    expect(await store.prune(14, ["gh:acme"])).toBe(1);
+    await store.close();
   });
 
-  it("only prunes the sources it is given", () => {
+  it("only prunes the sources it is given", async () => {
     let clock = Date.parse("2026-01-01T00:00:00Z");
     const store = createSqliteStore({ path: ":memory:", now: () => clock });
-    store.diffAndRecord("gh:a", [job("1")]);
-    store.diffAndRecord("gh:b", [job("1")]);
+    await store.diffAndRecord("gh:a", [job("1")]);
+    await store.diffAndRecord("gh:b", [job("1")]);
     clock = Date.parse("2026-01-21T00:00:00Z"); // +20d, both stale
-    expect(store.prune(14, ["gh:a"])).toBe(1); // only gh:a
-    expect(store.prune(14, ["gh:b"])).toBe(1); // gh:b still there until named
-    store.close();
+    expect(await store.prune(14, ["gh:a"])).toBe(1); // only gh:a
+    expect(await store.prune(14, ["gh:b"])).toBe(1); // gh:b still there until named
+    await store.close();
   });
 });
 
 describe("close (WAL checkpoint)", () => {
-  it("folds WAL writes into the main db file and truncates the -wal file", () => {
+  it("folds WAL writes into the main db file and truncates the -wal file", async () => {
     const dir = mkdtempSync(join(tmpdir(), "state-wal-"));
     const dbPath = join(dir, "state.db");
     // A second, idle connection to the SAME on-disk file, kept open across
@@ -135,7 +135,7 @@ describe("close (WAL checkpoint)", () => {
     const idleConn = new Database(dbPath);
     try {
       const store = createSqliteStore({ path: dbPath });
-      store.diffAndRecord("gh:acme", [job("1")]);
+      await store.diffAndRecord("gh:acme", [job("1")]);
 
       // A merely-*opened* second connection doesn't register as a WAL reader
       // until it actually touches the database — SQLite maps a connection
@@ -145,7 +145,7 @@ describe("close (WAL checkpoint)", () => {
       // holding a transaction/snapshot that could block a TRUNCATE checkpoint.
       idleConn.pragma("user_version");
 
-      store.close();
+      await store.close();
 
       // After a TRUNCATE checkpoint the -wal file is either gone or 0 bytes.
       const wal = `${dbPath}-wal`;

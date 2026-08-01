@@ -103,5 +103,18 @@
   { "kind": "company", "company": "FamPay", "ats": "lever", "token": "fampay", "tier": 2 },
   { "kind": "company", "company": "CRED", "ats": "lever", "token": "cred", "tier": 2 },
   { "kind": "company", "company": "Bosch India", "ats": "smartrecruiters", "token": "BoschGroup", "country": "in", "tier": 2 },
-  { "kind": "company", "company": "Continental India", "ats": "smartrecruiters", "token": "Continental", "country": "in", "tier": 2 }
+  { "kind": "company", "company": "Continental India", "ats": "smartrecruiters", "token": "Continental", "country": "in", "tier": 2 },
+  { "kind": "company", "company": "Zscaler", "ats": "greenhouse", "token": "zscaler", "tier": 2 },
+  { "kind": "company", "company": "Rubrik", "ats": "greenhouse", "token": "rubrik", "tier": 2 },
+  { "kind": "company", "company": "New Relic", "ats": "greenhouse", "token": "newrelic", "tier": 2 },
+  { "kind": "company", "company": "6sense", "ats": "greenhouse", "token": "6sense", "tier": 3 },
+  { "kind": "company", "company": "Sumo Logic", "ats": "greenhouse", "token": "sumologic", "tier": 3 },
+  { "kind": "company", "company": "ZoomInfo", "ats": "greenhouse", "token": "zoominfo", "tier": 3 },
+  { "kind": "company", "company": "Adyen", "ats": "greenhouse", "token": "adyen", "tier": 3 },
+  { "kind": "company", "company": "Starburst", "ats": "greenhouse", "token": "starburst", "tier": 3 },
+  { "kind": "company", "company": "Atlan", "ats": "ashby", "token": "atlan", "tier": 2 },
+  { "kind": "company", "company": "HighLevel", "ats": "lever", "token": "gohighlevel", "tier": 2 },
+  { "kind": "company", "company": "ServiceNow India", "ats": "smartrecruiters", "token": "ServiceNow", "country": "in", "tier": 2 },
+  { "kind": "company", "company": "Experian India", "ats": "smartrecruiters", "token": "Experian", "country": "in", "tier": 2 },
+  { "kind": "company", "company": "NielsenIQ India", "ats": "smartrecruiters", "token": "NielsenIQ", "country": "in", "tier": 2 }
 ]

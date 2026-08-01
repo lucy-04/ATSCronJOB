@@ -36,6 +36,22 @@ describe("workdayAdapter", () => {
     expect(calls[1]!.body.offset).toBe(20); // second page requested
   });
 
+  it("keeps paginating when Workday reports total only on page 1 (later pages total=0)", async () => {
+    // Real Workday quirk: total is present on the first page and 0 on every later
+    // page, even though results keep coming. The adapter must not stop at page 2.
+    const calls: { url: string; body: any }[] = [];
+    const http = pagedHttp({
+      // total (100) is only on page 1; later pages report 0 but still serve jobs.
+      0: { total: 100, jobPostings: Array.from({ length: 20 }, (_, i) => wdJob("P0-" + i, "/job/India-Pune/P0-" + i, "India, Pune")) },
+      20: { total: 0, jobPostings: Array.from({ length: 20 }, (_, i) => wdJob("P1-" + i, "/job/India-Pune/P1-" + i, "2 Locations")) },
+      40: { total: 0, jobPostings: Array.from({ length: 5 }, (_, i) => wdJob("P2-" + i, "/job/India-Pune/P2-" + i, "India, Bengaluru")) },
+      // offset 60 is unmapped -> pagedHttp returns an empty page -> loop stops
+    }, calls);
+    const jobs = await workdayAdapter.fetchJobs(source, http);
+    expect(jobs).toHaveLength(45); // 20 + 20 + 5, NOT capped at 40 by a later page's total=0
+    expect(calls.map((c) => c.body.offset)).toEqual([0, 20, 40, 60]);
+  });
+
   it("normalizes id (bulletFields[0]), url, title, location", async () => {
     const calls: { url: string; body: any }[] = [];
     const http = pagedHttp({ 0: { total: 1, jobPostings: [wdJob("JR123", "/job/India-Mumbai/Senior_JR123", "India, Mumbai")] } }, calls);

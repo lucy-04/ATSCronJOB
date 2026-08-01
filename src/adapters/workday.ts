@@ -51,7 +51,13 @@ export const workdayAdapter: CompanyAdapter = {
       const postings = data.jobPostings ?? [];
       if (postings.length === 0) break;
       for (const p of postings) jobs.push(normalize(p, base, site));
-      total = typeof data.total === "number" ? data.total : jobs.length;
+      // Workday reports `total` ONLY on the first page; later pages return
+      // total=0 while still serving results. Capture it once and never let a
+      // later page's 0 overwrite it (else we'd stop after page 2). The empty-page
+      // break and MAX_PAGES are the backstops.
+      if (total === Infinity && typeof data.total === "number" && data.total > 0) {
+        total = data.total;
+      }
       offset += PAGE;
     }
     return jobs;

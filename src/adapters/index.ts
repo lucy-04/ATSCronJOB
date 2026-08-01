@@ -4,6 +4,7 @@ import { ashbyAdapter } from "./ashby.js";
 import { leverAdapter } from "./lever.js";
 import { smartRecruitersAdapter } from "./smartrecruiters.js";
 import { adzunaAdapter } from "./adzuna.js";
+import { workdayAdapter } from "./workday.js";
 
 // Company ATS adapters, keyed by ATS. Others (lever, ashby, …) register here.
 const companyRegistry: Partial<Record<Ats, CompanyAdapter>> = {
@@ -11,6 +12,7 @@ const companyRegistry: Partial<Record<Ats, CompanyAdapter>> = {
   ashby: ashbyAdapter,
   lever: leverAdapter,
   smartrecruiters: smartRecruitersAdapter,
+  workday: workdayAdapter,
 };
 
 // Aggregator query adapters, keyed by provider.

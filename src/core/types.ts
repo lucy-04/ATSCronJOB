@@ -56,6 +56,8 @@ export interface WorkdaySource extends CompanyCommon {
   dc: string;
   /** The careers site path, e.g. "External". */
   site: string;
+  /** Optional Workday CxS free-text search; set to "India" to scope a source to India roles. */
+  searchText?: string;
 }
 
 /** A specific company's ATS board. Discriminated on `ats`. */

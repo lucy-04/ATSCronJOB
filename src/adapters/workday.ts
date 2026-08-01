@@ -41,7 +41,8 @@ export const workdayAdapter: CompanyAdapter = {
     const jobs: Job[] = [];
     let offset = 0;
     let total = Infinity;
-    for (let page = 0; page < MAX_PAGES && offset < total; page++) {
+    let page = 0;
+    for (; page < MAX_PAGES && offset < total; page++) {
       const data = await http.postJson<WorkdayResponse>(url, {
         appliedFacets: {},
         limit: PAGE,
@@ -60,6 +61,12 @@ export const workdayAdapter: CompanyAdapter = {
       }
       offset += PAGE;
     }
-    return jobs;
+    if (page === MAX_PAGES && offset < total) {
+      console.warn(`Workday ${tenant}/${site}: hit MAX_PAGES cap (${MAX_PAGES}); truncated near ${jobs.length} of ${total} postings`);
+    }
+    // Dedupe by id: offset pagination against a live-changing list can repeat a
+    // posting across pages, and Workday's total is unreliable past page 1 — return
+    // each job once so it never double-notifies within a single run.
+    return [...new Map(jobs.map((j) => [j.id, j])).values()];
   },
 };

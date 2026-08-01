@@ -52,6 +52,17 @@ describe("workdayAdapter", () => {
     expect(calls.map((c) => c.body.offset)).toEqual([0, 20, 40, 60]);
   });
 
+  it("dedupes by id when a posting repeats across pages (no double-notify)", async () => {
+    const calls: { url: string; body: any }[] = [];
+    const http = pagedHttp({
+      0: { total: 100, jobPostings: [wdJob("JR1", "/job/India-Pune/JR1", "India, Pune"), wdJob("JR2", "/job/India-Pune/JR2", "India, Pune")] },
+      // offset 20 repeats JR2 (pagination against a shifting list) + a new JR3
+      20: { total: 0, jobPostings: [wdJob("JR2", "/job/India-Pune/JR2", "India, Pune"), wdJob("JR3", "/job/India-Pune/JR3", "India, Pune")] },
+    }, calls);
+    const jobs = await workdayAdapter.fetchJobs(source, http);
+    expect(jobs.map((j) => j.id).sort()).toEqual(["JR1", "JR2", "JR3"]); // JR2 appears once, not twice
+  });
+
   it("normalizes id (bulletFields[0]), url, title, location", async () => {
     const calls: { url: string; body: any }[] = [];
     const http = pagedHttp({ 0: { total: 1, jobPostings: [wdJob("JR123", "/job/India-Mumbai/Senior_JR123", "India, Mumbai")] } }, calls);

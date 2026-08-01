@@ -78,6 +78,7 @@ token or remove the entry.
 - **Ashby** — `"ats":"ashby"`, `token` = job-board slug (`api.ashbyhq.com/posting-api/job-board/{token}`). This is where many AI-first companies post (OpenAI, Cohere, Notion, Ramp, Perplexity, …).
 - **Lever** — `"ats":"lever"`, `token` = postings slug (`api.lever.co/v0/postings/{token}?mode=json`). Public, key-less; returns a bare array of postings.
 - **SmartRecruiters** — `"ats":"smartrecruiters"`, `token` = the case-sensitive company identifier (`api.smartrecruiters.com/v1/companies/{token}/postings`). Public, key-less; large enterprises (e.g. ServiceNow, Experian). Only the first 100 postings per company are fetched. Add `"country": "in"` (ISO code) to scope a source to one country server-side (e.g. Bosch India); a country-scoped source dedups independently from the same company's global source.
+- **Workday** — `"ats":"workday"` with `tenant`/`dc`/`site` taken from the careers URL (e.g. `nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite` → tenant `nvidia`, dc `wd5`, site `NVIDIAExternalCareerSite`), plus optional `searchText` (set `"India"` to scope to India roles). Public Candidate-Experience API (`POST /wday/cxs/{tenant}/{site}/jobs`), paginated; up to 500 postings per source. Used by most enterprise India GCCs.
 
 All are public, key-less APIs. A wrong/renamed token surfaces on the next run as
 `! <Company> failed: … 404 …` without aborting the run — fix or remove the entry.

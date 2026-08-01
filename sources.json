@@ -116,5 +116,16 @@
   { "kind": "company", "company": "HighLevel", "ats": "lever", "token": "gohighlevel", "tier": 2 },
   { "kind": "company", "company": "ServiceNow India", "ats": "smartrecruiters", "token": "ServiceNow", "country": "in", "tier": 2 },
   { "kind": "company", "company": "Experian India", "ats": "smartrecruiters", "token": "Experian", "country": "in", "tier": 2 },
-  { "kind": "company", "company": "NielsenIQ India", "ats": "smartrecruiters", "token": "NielsenIQ", "country": "in", "tier": 2 }
+  { "kind": "company", "company": "NielsenIQ India", "ats": "smartrecruiters", "token": "NielsenIQ", "country": "in", "tier": 2 },
+  { "kind": "company", "company": "Salesforce (India)", "ats": "workday", "tenant": "salesforce", "dc": "wd12", "site": "External_Career_Site", "searchText": "India", "tier": 1 },
+  { "kind": "company", "company": "NVIDIA (India)", "ats": "workday", "tenant": "nvidia", "dc": "wd5", "site": "NVIDIAExternalCareerSite", "searchText": "India", "tier": 1 },
+  { "kind": "company", "company": "Mastercard (India)", "ats": "workday", "tenant": "mastercard", "dc": "wd1", "site": "CorporateCareers", "searchText": "India", "tier": 2 },
+  { "kind": "company", "company": "Adobe (India)", "ats": "workday", "tenant": "adobe", "dc": "wd5", "site": "external_experienced", "searchText": "India", "tier": 1 },
+  { "kind": "company", "company": "eBay (India)", "ats": "workday", "tenant": "ebay", "dc": "wd5", "site": "apply", "searchText": "India", "tier": 2 },
+  { "kind": "company", "company": "Autodesk (India)", "ats": "workday", "tenant": "autodesk", "dc": "wd1", "site": "Ext", "searchText": "India", "tier": 2 },
+  { "kind": "company", "company": "BlackRock (India)", "ats": "workday", "tenant": "blackrock", "dc": "wd1", "site": "BlackRock_Professional", "searchText": "India", "tier": 2 },
+  { "kind": "company", "company": "Workday (India)", "ats": "workday", "tenant": "workday", "dc": "wd5", "site": "Workday", "searchText": "India", "tier": 3 },
+  { "kind": "company", "company": "Comcast (India)", "ats": "workday", "tenant": "comcast", "dc": "wd5", "site": "Comcast_Careers", "searchText": "India", "tier": 3 },
+  { "kind": "company", "company": "Broadcom (India)", "ats": "workday", "tenant": "broadcom", "dc": "wd1", "site": "External_Career", "searchText": "India", "tier": 3 },
+  { "kind": "company", "company": "PayPal (India)", "ats": "workday", "tenant": "paypal", "dc": "wd1", "site": "jobs", "searchText": "India", "tier": 3 }
 ]
